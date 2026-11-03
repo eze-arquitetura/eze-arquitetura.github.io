@@ -94,6 +94,7 @@ button{font:inherit;cursor:pointer}
 .toc{position:sticky;top:84px;align-self:start;display:flex;flex-direction:column;gap:2px}
 .toc a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:5px;font-size:13px;display:flex;gap:8px}
 .toc a span{font-family:var(--f-num);color:var(--accent);font-size:12px}
+.toc a.on{background:var(--paper);color:var(--ink)}
 .toc a:hover{background:var(--paper);color:var(--ink)}
 .toc .back{margin-bottom:10px;color:var(--accent);font-weight:500}
 @media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}.toc{display:none}.actions{margin-left:0}}
@@ -496,6 +497,7 @@ async function pollStudy() {
 /* ============ roteamento ============ */
 function route() {
   const h = location.hash.slice(1);
+  if (/^(s\d|sq)$/.test(h)) return;
   if (S.mode === 'connecting') return;
   if (S.mode === 'login') { if (h === 'publico' || h.startsWith('publico-')) { boot(); return; } renderLogin(); return; }
   if (S.mode === 'public') {
@@ -585,10 +587,10 @@ function renderStudy(keepScroll) {
   <div class="layout">
     <nav class="toc">
       <a class="back" href="${homeHash()}">← Todos os estudos</a>
-      <a href="#s1"><span>01</span>Identificação</a><a href="#s2"><span>02</span>Terreno e áreas</a><a href="#sq"><span>03</span>Quadro de áreas</a>
-      <a href="#s3"><span>04</span>Custo de obra</a>
-      <a href="#s4"><span>05</span>Outorgas</a><a href="#s5"><span>06</span>Unidades e vendas</a><a href="#s6"><span>07</span>Outros custos</a>
-      <a href="#s7"><span>08</span>Resultado</a><a href="#s8"><span>09</span>Observações</a>
+      <a href="#s1" data-sec="s1"><span>01</span>Identificação</a><a href="#s2" data-sec="s2"><span>02</span>Terreno e áreas</a><a href="#sq" data-sec="sq"><span>03</span>Quadro de áreas</a>
+      <a href="#s3" data-sec="s3"><span>04</span>Custo de obra</a>
+      <a href="#s4" data-sec="s4"><span>05</span>Outorgas</a><a href="#s5" data-sec="s5"><span>06</span>Unidades e vendas</a><a href="#s6" data-sec="s6"><span>07</span>Outros custos</a>
+      <a href="#s7" data-sec="s7"><span>08</span>Resultado</a><a href="#s8" data-sec="s8"><span>09</span>Observações</a>
     </nav>
     <main id="study" class="${ro ? 'ro' : ''}">
       ${secIdent(s)}${secTerreno(s, c)}${secQuadro(s, c)}${secObra(s, c)}${secOutorgas(s, c)}${secUnidades(s, c)}${secCustos(s, c)}
@@ -1227,6 +1229,12 @@ function exportXLSX() {
   offerFile(fileBase(s) + '.xlsx', new Blob([out]));
 }
 
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[data-sec]'); if (!a) return;
+  e.preventDefault();
+  document.getElementById(a.dataset.sec)?.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'});
+  document.querySelectorAll('.toc a[data-sec]').forEach(x => x.classList.toggle('on', x === a));
+});
 /* ============ entrada (login) ============ */
 const L = { step:'email', email:'', msg:'', err:'' };
 function renderLogin() {
