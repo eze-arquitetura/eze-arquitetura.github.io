@@ -87,9 +87,7 @@ create policy acessos_remover on public.acessos for delete to authenticated
 drop policy if exists estudos_ler on public.estudos;
 create policy estudos_ler on public.estudos for select to authenticated
   using (public.meu_papel() is not null);
-drop policy if exists estudos_publicos on public.estudos;
-create policy estudos_publicos on public.estudos for select to anon
-  using (publico);
+drop policy if exists estudos_publicos on public.estudos; -- sem login ninguém vê estudos
 drop policy if exists estudos_inserir on public.estudos;
 create policy estudos_inserir on public.estudos for insert to authenticated
   with check (public.meu_papel() in ('admin','editor'));

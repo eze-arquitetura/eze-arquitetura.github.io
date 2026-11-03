@@ -499,13 +499,12 @@ function route() {
   const h = location.hash.slice(1);
   if (/^(s\d|sq)$/.test(h)) return;
   if (S.mode === 'connecting') return;
-  if (S.mode === 'login') { if (h === 'publico' || h.startsWith('publico-')) { boot(); return; } renderLogin(); return; }
+  if (S.mode === 'login') { renderLogin(); return; }
   if (S.mode === 'public') {
     if (!(h === 'publico' || h.startsWith('publico-'))) { boot(); return; }
     if (h.startsWith('publico-')) openStudy(h.slice(8)); else { closeStudy(); renderList(); }
     return;
   }
-  if (h === 'publico' || h.startsWith('publico-')) { boot(); return; }
   if (h === 'acessos') { closeStudy(); renderAcessos(); return; }
   if (h.startsWith('estudo-')) openStudy(h.slice(7)); else { closeStudy(); renderList(); loadList().then(ok => { if (ok && !S.curId && location.hash.slice(1) !== 'acessos') renderList(); }); }
 }
@@ -539,7 +538,7 @@ function renderList() {
     : !S.canWrite ? `<div class="banner">Seu acesso é de leitura: você pode ver e exportar, mas não alterar.</div>` : '';
   const nPub = S.list.filter(x => x.publico).length;
   const pubUrl = location.origin + location.pathname + '#publico';
-  const pubBox = S.mode === 'db' && S.role === 'admin' ? `<div class="pubbox"><div><b>Link público (sem login)</b><p>Quem abre este link vê, sem senha, só os estudos marcados como públicos (${nPub} agora), sempre atualizados: ${esc(pubUrl)}</p></div><button class="btn sm" data-copy="${esc(pubUrl)}">Copiar link público</button></div>` : '';
+  const pubBox = '';
   const cards = items.map(st => {
     const c = calc(st);
     return `<a class="card" href="${studyHash(esc(st.id))}" style="text-decoration:none">
@@ -550,7 +549,7 @@ function renderList() {
         <div class="fig"><small>Lucro</small><b>${fM(c.lucro)}</b></div>
         <div class="fig"><small>Margem</small><b><span class="pill ${margemCls(c.margem)}">${fP(c.margem)}</span></b></div>
       </div>
-      <div class="sub" style="font-size:12px">${c.nUn} unidades · ${fN(st.areaConstruida,0)} m² construídos${st.publico && S.mode === 'db' ? ' · <span class="tag pub">público</span>' : ''}${st.atualizadoPor && S.mode === 'db' ? `<br>Atualizado por ${esc(st.atualizadoPor)} ${ago(st.atualizadoEm)}` : ''}</div>
+      <div class="sub" style="font-size:12px">${c.nUn} unidades · ${fN(st.areaConstruida,0)} m² construídos${st.atualizadoPor && S.mode === 'db' ? `<br>Atualizado por ${esc(st.atualizadoPor)} ${ago(st.atualizadoEm)}` : ''}</div>
     </a>`;
   }).join('');
   $('#app').innerHTML = `<div class="wrap">${banner}${pubBox}
@@ -669,7 +668,7 @@ function secIdent(s) {
     ${c('endereco', 'Endereço / projeto')}${c('descricao', 'Uso')}${c('local', 'Bairro / cidade')}
     ${c('empresa', 'Empresa')}${c('responsavel', 'Responsável técnico')}<div class="c"></div>
   </div>
-  ${S.mode === 'db' ? `<label class="chk" style="margin-top:12px"><input type="checkbox" id="s.publico" data-bind="s.publico" data-t="bool" ${s.publico ? 'checked' : ''}> Mostrar este estudo no link público (qualquer pessoa vê, sem login)</label>` : ''}
+  
   </div></section>`;
 }
 function secTerreno(s, c) {
@@ -1387,10 +1386,7 @@ async function enterApp() {
 async function boot() {
   if (!sb) { $('#app').innerHTML = `<div class="wrap"><div class="empty" style="margin-top:30px"><h3>Não foi possível carregar</h3><p>Recarregue a página. Se continuar, confira a internet.</p></div></div>`; return; }
   const h = location.hash.slice(1);
-  if (h === 'publico' || h.startsWith('publico-')) {
-    S.mode = 'public'; S.canWrite = false; renderTopUser(); setStatus('', 'Versão para consulta');
-    await loadList(); route(); return;
-  }
+  if (h === 'publico' || h.startsWith('publico-')) history.replaceState(null, '', location.pathname);
   S.mode = 'connecting';
   await enterApp();
 }

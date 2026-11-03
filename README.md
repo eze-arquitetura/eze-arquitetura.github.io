@@ -2,7 +2,7 @@
 
 Sistema de estudos de viabilidade financeira imobiliária da EZE Arquitetura e Gestão.
 
-- `index.html` — o sistema inteiro (página única). Publicado pela Vercel, sem etapa de build.
+- `index.html` — o sistema inteiro (página única). Publicado pelo GitHub Pages em https://eze-arquitetura.github.io, sem etapa de build.
 - `supabase/schema.sql` — estrutura do banco e regras de acesso. Rodar uma vez no SQL Editor do Supabase.
 
 ## Como funciona o acesso
@@ -10,7 +10,7 @@ Sistema de estudos de viabilidade financeira imobiliária da EZE Arquitetura e G
 - Só entra quem tem o e-mail liberado na tela **Acessos** (admin).
 - No primeiro acesso a pessoa cria a própria senha.
 - Tipos: **Admin** (tudo + acessos), **Editor** (cria e edita), **Leitor** (só vê e exporta).
-- Link público sem login: `/#publico` mostra apenas os estudos marcados como públicos.
+- Sem login, a pessoa vê apenas a tela de entrada.
 
 ## Configuração
 
