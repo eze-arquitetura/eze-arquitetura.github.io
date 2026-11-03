@@ -1,0 +1,1396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EZE Viabilidade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<style>
+/* Layout: prancha técnica — carimbo no topo, barra de resultado fixa, seções numeradas na ordem do cálculo */
+:root{
+  --bg:#EEF2F1; --paper:#FFFFFF; --ink:#14262B; --muted:#5A6B6F; --line:#D3DBDA; --line2:#E6ECEB;
+  --accent:#1E5E68; --accent-ink:#FFFFFF; --accent-soft:#E0ECEC; --sand:#A9783A; --sand-soft:#F4EBDD;
+  --good:#2C7A4B; --good-soft:#E2F1E7; --warn:#A86B10; --warn-soft:#FBEFD9; --bad:#B23F2C; --bad-soft:#F8E3DE;
+  --field:#F7FAF9; --shadow:0 1px 2px rgba(20,38,43,.06),0 4px 16px rgba(20,38,43,.05);
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-num:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1618; --paper:#152023; --ink:#E3EBEA; --muted:#93A4A7; --line:#2A3B3E; --line2:#1F2D30;
+  --accent:#72B6BF; --accent-ink:#0E1618; --accent-soft:#1C3236; --sand:#D6AA6C; --sand-soft:#2E261B;
+  --good:#6DC28E; --good-soft:#18301F; --warn:#E2A955; --warn-soft:#33281A; --bad:#EC8571; --bad-soft:#3A1F1A;
+  --field:#1A272A; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1618; --paper:#152023; --ink:#E3EBEA; --muted:#93A4A7; --line:#2A3B3E; --line2:#1F2D30;
+  --accent:#72B6BF; --accent-ink:#0E1618; --accent-soft:#1C3236; --sand:#D6AA6C; --sand-soft:#2E261B;
+  --good:#6DC28E; --good-soft:#18301F; --warn:#E2A955; --warn-soft:#33281A; --bad:#EC8571; --bad-soft:#3A1F1A;
+  --field:#1A272A; --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+.num,.mono{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* top bar */
+.top{background:var(--paper);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;padding-block:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.mark{width:30px;height:30px;border:2px solid var(--accent);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;color:var(--accent);font-size:13px}
+.brand b{font-family:var(--f-display);font-size:16px;font-weight:700}
+.brand span{color:var(--muted);font-size:12px;display:block;line-height:1.1}
+.spacer{flex:1}
+.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good)}
+.dot.busy{background:var(--warn)} .dot.err{background:var(--bad)} .dot.off{background:var(--muted)}
+
+.btn{border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:8px 14px;border-radius:6px;font-weight:500;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.pri:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.danger{color:var(--bad)} .btn.danger:hover{border-color:var(--bad);color:var(--bad)}
+.btn.confirm{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.ico{width:16px;height:16px;flex:none}
+
+.banner{margin-top:14px;padding:10px 14px;border-radius:6px;background:var(--warn-soft);color:var(--ink);border:1px solid var(--line);font-size:13px}
+
+/* list */
+.listhead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-block:28px 18px}
+.listhead h1{font-size:28px}
+.listhead p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding-bottom:40px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;text-align:left;color:var(--ink);box-shadow:var(--shadow);min-width:0}
+.card:hover{border-color:var(--accent)}
+.card .rev{font-family:var(--f-num);font-size:11px;color:var(--muted);letter-spacing:.06em}
+.card h3{font-size:16px;line-height:1.25}
+.card .sub{color:var(--muted);font-size:13px}
+.card .figs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;border-top:1px solid var(--line2);padding-top:10px}
+.fig small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.fig b{font-family:var(--f-num);font-weight:500;font-size:13px}
+.empty{background:var(--paper);border:1px dashed var(--line);border-radius:8px;padding:40px 20px;text-align:center;color:var(--muted)}
+.empty h3{color:var(--ink);margin-bottom:6px}
+
+/* study */
+.sumbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line)}
+.sumbar .wrap{display:flex;align-items:center;gap:10px 22px;padding-block:10px;flex-wrap:wrap}
+.sumk{display:flex;flex-direction:column;min-width:0}
+.sumk small{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sumk b{font-family:var(--f-num);font-weight:500;font-size:15px}
+.sumk.big b{font-size:17px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;font-family:var(--f-body)}
+.pill.good{background:var(--good-soft);color:var(--good)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+
+.layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;padding-block:22px 60px}
+.toc{position:sticky;top:84px;align-self:start;display:flex;flex-direction:column;gap:2px}
+.toc a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:5px;font-size:13px;display:flex;gap:8px}
+.toc a span{font-family:var(--f-num);color:var(--accent);font-size:12px}
+.toc a:hover{background:var(--paper);color:var(--ink)}
+.toc .back{margin-bottom:10px;color:var(--accent);font-weight:500}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}.toc{display:none}.actions{margin-left:0}}
+
+.sec{background:var(--paper);border:1px solid var(--line);border-radius:8px;margin-bottom:18px;box-shadow:var(--shadow);min-width:0;scroll-margin-top:90px}
+.sec>header{display:flex;align-items:baseline;gap:12px;padding:16px 18px 0;flex-wrap:wrap}
+.sec>header .n{font-family:var(--f-num);color:var(--accent);font-size:13px}
+.sec>header h2{font-size:18px}
+.sec>header p{flex-basis:100%;margin:2px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
+.sec .body{padding:16px 18px 18px}
+
+/* carimbo */
+.carimbo{display:grid;grid-template-columns:2fr 1fr 1fr;border:1.5px solid var(--ink);border-radius:2px}
+.carimbo .c{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px 10px 8px;min-width:0}
+.carimbo .c label{display:block;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.carimbo .c input{border:0;background:transparent;padding:2px 0;width:100%;font:inherit;color:var(--ink);font-weight:500}
+.carimbo .c input:focus{outline:none;background:var(--field)}
+.carimbo .c.wide{grid-column:span 3}
+.carimbo .c.title input{font-family:var(--f-display);font-size:19px;font-weight:700}
+@media (max-width:640px){.carimbo{grid-template-columns:1fr 1fr}.carimbo .c.wide{grid-column:span 2}}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 16px}
+.f label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.inp{display:flex;align-items:center;border:1px solid var(--line);background:var(--field);border-radius:5px;overflow:hidden}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.inp input,.inp select{border:0;background:transparent;color:var(--ink);font:inherit;padding:7px 9px;width:100%;min-width:0}
+.inp input.n{font-family:var(--f-num);text-align:right}
+.inp input:focus,.inp select:focus{outline:none}
+.inp .u{padding:0 9px 0 0;color:var(--muted);font-size:12px;white-space:nowrap}
+.inp .pre{padding:0 0 0 9px;color:var(--muted);font-size:12px}
+.calc{border:1px dashed var(--line);border-radius:5px;padding:7px 9px;font-family:var(--f-num);text-align:right;background:transparent;color:var(--ink)}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.formula{margin-top:14px;padding:10px 12px;background:var(--accent-soft);border-radius:6px;font-size:13px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.formula b{font-family:var(--f-num);font-weight:500}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;font-weight:600;padding:8px 8px;background:var(--line2);white-space:nowrap}
+td{padding:3px 6px;border-top:1px solid var(--line2);vertical-align:middle}
+th.r,td.r{text-align:right}
+td .cell{border:1px solid transparent;background:transparent;color:var(--ink);font:inherit;padding:5px 6px;border-radius:4px;width:100%;min-width:0}
+td .cell:hover{border-color:var(--line)}
+td .cell:focus{outline:none;border-color:var(--accent);background:var(--field)}
+td .cell.n{font-family:var(--f-num);text-align:right}
+td select.cell{cursor:pointer}
+td.out{font-family:var(--f-num);text-align:right;white-space:nowrap;padding-right:10px}
+tr.grp td{background:var(--accent-soft);font-weight:600;padding:6px 8px}
+tr.grp .gmeta{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+tr.perm td:first-child{box-shadow:inset 3px 0 0 var(--sand)}
+tr.perm{background:var(--sand-soft)}
+tfoot td{font-weight:600;background:var(--line2);padding:8px}
+.del{border:0;background:transparent;color:var(--muted);padding:4px 6px;border-radius:4px}
+.adot{color:var(--accent);font-weight:500}
+.del:hover{color:var(--bad);background:var(--bad-soft)}
+.tag{font-size:11px;padding:1px 6px;border-radius:3px;font-weight:600}
+.tag.perm{background:var(--sand-soft);color:var(--sand);border:1px solid var(--sand)}
+.toolrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.tool{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--field);display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.tool .f{min-width:130px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* results */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.kpi small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.kpi b{display:block;font-family:var(--f-num);font-weight:500;font-size:19px;margin-top:4px;overflow-wrap:anywhere}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.hero{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.kpi.hero small,.kpi.hero span{color:var(--accent-ink);opacity:.8}
+.cols2{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:22px;margin-top:22px}
+@media (max-width:900px){.cols2{grid-template-columns:minmax(0,1fr)}}
+h3.mini{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-family:var(--f-body);font-weight:600;margin-bottom:10px}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar .lbl{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.bar .lbl .num{color:var(--muted);font-size:12px}
+.bar .track{height:8px;background:var(--line2);border-radius:4px;margin-top:4px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:4px}
+.bar.perm .fill{background:var(--sand)}
+.bar.profit .fill{background:var(--good)}
+.bar.loss .fill{background:var(--bad)}
+.ind td{padding:7px 8px}
+.ind td:last-child{text-align:right;font-family:var(--f-num)}
+.sens th,.sens td{text-align:center;padding:7px 6px}
+.sens td{font-family:var(--f-num);font-size:12.5px}
+.sens td.h{font-family:var(--f-body);font-weight:600;color:var(--muted);background:var(--line2);font-size:12px}
+.sens td.g{background:var(--good-soft);color:var(--good)} .sens td.w{background:var(--warn-soft);color:var(--warn)} .sens td.b{background:var(--bad-soft);color:var(--bad)}
+.sens td.base{outline:2px solid var(--ink);outline-offset:-2px;font-weight:600}
+.alerts{display:flex;flex-direction:column;gap:6px;margin-top:16px}
+.alert{font-size:13px;padding:8px 12px;border-radius:5px;background:var(--warn-soft);border-left:3px solid var(--warn)}
+.alert.ok{background:var(--good-soft);border-left-color:var(--good)}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:6px;padding:10px;font:inherit;resize:vertical}
+textarea:focus{outline:none;border-color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:6px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+.ro input,.ro select,.ro textarea{pointer-events:none}
+.topuser{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.topuser .who{font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.login{max-width:420px;margin:48px auto;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:28px 24px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px}
+.lhead{display:flex;gap:14px;align-items:center}
+.lhead h1{font-size:22px}
+.lhead p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.mark.big{width:44px;height:44px;font-size:15px}
+.lform{display:flex;flex-direction:column;gap:14px}
+.lform .btn.pri{justify-content:center;padding:10px 14px}
+.lmail{font-weight:500;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:6px;overflow-wrap:anywhere}
+.llinks{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.llinks .btn{color:var(--accent);padding-left:0}
+.lfoot{margin:0;font-size:12px;color:var(--muted)}
+.accform{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.ur{display:inline-flex;gap:4px}
+.ur .btn{padding:5px 8px}
+.pubbox{margin-top:14px;padding:14px 16px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--line);display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.pubbox>div{flex:1;min-width:240px}
+.pubbox p{margin:4px 0 0;font-size:13px;color:var(--muted);max-width:75ch}
+.tag.pub{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--paper);border-left:1px solid var(--line);z-index:15;overflow-y:auto;padding:calc(16px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 18px;display:flex;flex-direction:column;gap:14px;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+[hidden]{display:none!important}
+.dhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dhead h2{font-size:18px}
+.dnote{margin:0;font-size:13px;color:var(--muted)}
+.ver{border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.vt{display:flex;flex-direction:column;gap:2px}
+.vt span{font-size:12px;color:var(--muted)}
+.vsum{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+.vsum b{font-family:var(--f-num);font-weight:500;color:var(--ink)}
+.vsum b.pill{font-family:var(--f-body)}
+.vact{display:flex;gap:6px;flex-wrap:wrap}
+@media (prefers-reduced-motion:no-preference){.bar .fill{transition:width .3s}}
+</style>
+
+</head>
+<body>
+<div class="top"><div class="wrap">
+  <a class="brand" href="#inicio"><div class="mark">EVF</div><div><b>EZE Viabilidade</b><span>Estudos de viabilidade financeira</span></div></a>
+  <div class="spacer"></div>
+  <div class="status" id="status"><i class="dot off"></i><span>Conectando…</span></div><div class="topuser" id="topUser"></div>
+</div></div>
+<div id="app"></div>
+<div class="toast" id="toast" hidden></div>
+
+
+<script>
+/* ============ utilidades ============ */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { const n = +v; return Number.isFinite(n) ? n : 0; };
+const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const clone = o => JSON.parse(JSON.stringify(o));
+const nf = (d) => new Intl.NumberFormat('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fN = (v, d=2) => nf(d).format(num(v));
+const fR = (v, d=0) => 'R$ ' + nf(d).format(num(v));
+const fP = (v, d=1) => nf(d).format(num(v) * 100) + '%';
+const fM = (v) => { const a = Math.abs(num(v)); return a >= 1e6 ? 'R$ ' + nf(2).format(v/1e6) + ' mi' : fR(v); };
+const fDate = s => { if (!s) return '—'; const [y,m,d] = String(s).split('-'); return d ? `${d}/${m}/${y}` : s; };
+function parseBR(str) {
+  let s = String(str).trim().replace(/[R$%\s]/g, '');
+  if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  const n = parseFloat(s); return Number.isFinite(n) ? n : 0;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3200); }
+const ICON = {
+  pdf:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 15h6M9 18h4"/></svg>',
+  xls:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>',
+  plus:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  copy:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  undo:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>',
+  redo:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg>',
+  save:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
+  hist:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
+  x:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+
+/* ============ modelo ============ */
+function blankStudy(prev) {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    nome:'Novo estudo', cliente:'', endereco:'', descricao:'', local:'', data:today,
+    responsavel: prev?.responsavel || '', empresa: prev?.empresa || 'EZE Arquitetura e Gestão', revisao:'R00',
+    terreno:0, to:0, ca:0, permeab:0, vagas:0, pavimentos:0,
+    areaConstruida:0, areaLazer:0,
+    cub: prev?.cub || 0, cubRef: prev?.cubRef || '', fatorCub:1.4,
+    precoBase:0, comissao:6, imposto:6,
+    outorgas:[],
+    quadroAreas: defaultQuadro(), dadosUrb: defaultUrb(),
+    unidades:[{id:rid(), nome:'Apto 101', pav:'1º pavimento', area:0, fpos:1, fpav:1, pm:null, tipo:'venda'}],
+    custos:[
+      {id:rid(), desc:'Marketing', modo:'vgv', valor:0},
+      {id:rid(), desc:'Projetos', modo:'fixo', valor:0},
+      {id:rid(), desc:'Assessoria jurídica', modo:'fixo', valor:0},
+      {id:rid(), desc:'Reserva pós-obra', modo:'obra', valor:0},
+    ],
+    notas:'', criadoEm:Date.now(), atualizadoEm:Date.now(),
+  };
+}
+function defaultQuadro() { return ['Térreo', 'Tipo', 'Cobertura', 'Barrilete', 'Reservatório'].map(d => ({id:rid(), desc:d, obs:'', qtd:1, area:0})); }
+function defaultUrb() { return ['Número de unidades', 'Número de unidades residenciais', 'Número de unidades comerciais', 'Área comum', 'Área comercial', 'Área residencial'].map(d => ({id:rid(), desc:d, pct:null, valor:''})); }
+const quadroTotal = s => (s.quadroAreas || []).reduce((a, q) => a + num(q.qtd) * num(q.area), 0);
+const MODOS = {fixo:'Valor fixo (R$)', vgv:'% do VGV', obra:'% do custo de obra'};
+
+function unitPrice(s, u) { return num(u.pm) > 0 ? num(u.pm) : num(s.precoBase); }
+function precoAdotado(s, u) { return unitPrice(s, u) * num(u.fpos || 1) * num(u.fpav || 1); }
+function calc(s, opt={}) {
+  const pk = 1 + (opt.dPreco || 0), ok = 1 + (opt.dObra || 0);
+  const U = s.unidades || [];
+  const uv = U.map(u => num(u.area) * unitPrice(s, u) * pk * num(u.fpos || 1) * num(u.fpav || 1));
+  const areaPriv = U.reduce((a, u) => a + num(u.area), 0);
+  const vgv = uv.reduce((a, b) => a + b, 0);
+  const permuta = U.reduce((a, u, i) => a + (u.tipo === 'permuta' ? uv[i] : 0), 0);
+  const venda = vgv - permuta;
+  const nPerm = U.filter(u => u.tipo === 'permuta').length;
+  const custoM2Obra = num(s.cub) * num(s.fatorCub) * ok;
+  const obra = num(s.areaConstruida) * custoM2Obra;
+  const ov = (s.outorgas || []).map(o => num(o.area) * num(s.cub) * num(o.pct) / 100);
+  const outorga = ov.reduce((a, b) => a + b, 0);
+  const comissao = venda * num(s.comissao) / 100;
+  const imposto = venda * num(s.imposto) / 100;
+  const cv = (s.custos || []).map(c => c.modo === 'vgv' ? vgv * num(c.valor) / 100 : c.modo === 'obra' ? obra * num(c.valor) / 100 : num(c.valor));
+  const items = [
+    {k:'permuta', label:'Permuta (unidades dadas pelo terreno)', base:`${nPerm} unidade${nPerm===1?'':'s'}`, v:permuta},
+    {k:'obra', label:'Obra', base:`${fN(s.areaConstruida)} m² × ${fR(custoM2Obra,2)}/m²`, v:obra},
+    {k:'outorga', label:'Outorgas', base:`${(s.outorgas||[]).length} item(ns)`, v:outorga},
+    {k:'comissao', label:'Corretagem', base:`${fN(s.comissao,1)}% das vendas`, v:comissao},
+    {k:'imposto', label:'Impostos', base:`${fN(s.imposto,1)}% das vendas`, v:imposto},
+    ...(s.custos || []).map((c, i) => ({k:'c'+i, label:c.desc || 'Outro custo', base: c.modo==='fixo' ? 'valor fixo' : `${fN(c.valor,1)}% ${c.modo==='vgv'?'do VGV':'da obra'}`, v:cv[i]})),
+  ];
+  const total = items.reduce((a, b) => a + b.v, 0);
+  const lucro = vgv - total;
+  return { uv, ov, cv, items, areaPriv, vgv, permuta, venda, nPerm, nUn:U.length, custoM2Obra, obra, outorga, comissao, imposto, total, lucro,
+    margem: vgv ? lucro / vgv : 0, sobreObra: obra ? lucro / obra : 0, sobreCusto: total ? lucro / total : 0,
+    custoM2: num(s.areaConstruida) ? total / num(s.areaConstruida) : 0, vgvM2: areaPriv ? vgv / areaPriv : 0,
+    eficiencia: num(s.areaConstruida) ? areaPriv / num(s.areaConstruida) : 0, ticket: U.length ? vgv / U.length : 0 };
+}
+const margemCls = m => m >= 0.2 ? 'good' : m >= 0.1 ? 'warn' : 'bad';
+const D_PRECO = [-0.15, -0.10, -0.05, 0, 0.05, 0.10], D_OBRA = [-0.10, 0, 0.10, 0.20];
+function groupsOf(s) {
+  const map = new Map();
+  (s.unidades || []).forEach((u, i) => { const k = (u.pav || '').trim() || 'Sem pavimento'; if (!map.has(k)) map.set(k, []); map.get(k).push(i); });
+  const out = new Map();
+  [...map.keys()].sort(COLL.compare).forEach(k => out.set(k, map.get(k).sort((a, b) => COLL.compare(s.unidades[a].nome || '', s.unidades[b].nome || ''))));
+  return out;
+}
+const ARR = {u:'unidades', o:'outorgas', c:'custos', q:'quadroAreas', d:'dadosUrb'};
+const pavKey = u => (u.pav || '').trim() || 'Sem pavimento';
+const COLL = new Intl.Collator('pt-BR', {numeric:true, sensitivity:'base'});
+function nextUnitName(s, idx) {
+  let best = null;
+  idx.forEach(i => { const m = String(s.unidades[i].nome || '').match(/^(.*?)(\d+)(\D*)$/); if (m && (!best || +m[2] > +best[2])) best = m; });
+  return best ? best[1] + String(+best[2] + 1).padStart(best[2].length, '0') + best[3] : 'Nova unidade';
+}
+function alertsOf(s, c) {
+  const a = [];
+  if (!num(s.cub)) a.push('Informe o valor do CUB para calcular a obra e as outorgas.');
+  if (!num(s.areaConstruida)) a.push('Informe a área total construída.');
+  if (!num(s.precoBase) && !(s.unidades||[]).some(u => num(u.pm) > 0)) a.push('Informe o preço base de venda (R$/m²).');
+  const z = (s.unidades||[]).filter(u => !num(u.area)).length;
+  if (z) a.push(`${z} unidade(s) sem área preenchida.`);
+  if (num(s.areaConstruida) && c.areaPriv > num(s.areaConstruida)) a.push('A área privativa está maior que a área construída. Confira as áreas.');
+  if (c.vgv && c.margem < 0.15) a.push(`Margem de ${fP(c.margem)} sobre o VGV está abaixo de 15%, faixa considerada apertada para incorporação.`);
+  return a;
+}
+
+/* ============ estado ============ */
+const SUPABASE_URL = '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+let sb = null;
+try { sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null; } catch (e) { sb = null; console.error(e); }
+const S = { db:null, user:null, canWrite:false, mode:'connecting', list:[], local:{}, cur:null, curId:null,
+  saveT:null, saving:false, again:false, pendingRemote:null, client:rid(), confirmDel:false, tool:null,
+  canPublish:false, uid:null, panel:null, versions:[], confirmV:null, pubInfo:null,
+  email:null, role:null, rev:0, pollT:null, listT:null };
+const homeHash = () => S.mode === 'public' ? '#publico' : '#inicio';
+const studyHash = id => (S.mode === 'public' ? '#publico-' : '#estudo-') + id;
+const fromRow = r => ({...(r.dados || {}), id:r.id, publico:!!r.publico, _rev:r.rev, atualizadoEm: Date.parse(r.atualizado_em) || 0, atualizadoPor: r.atualizado_por || ''});
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} dias`; };
+
+/* ============ desfazer / refazer ============ */
+const H = { past:[], future:[], key:null, t:0 };
+function resetHist() { H.past = []; H.future = []; H.key = null; }
+function snap(key) {
+  if (!S.cur) return;
+  const now = Date.now();
+  if (key && key === H.key && now - H.t < 800) { H.t = now; return; }
+  H.past.push(JSON.stringify(S.cur)); if (H.past.length > 100) H.past.shift();
+  H.future = []; H.key = key || null; H.t = now;
+}
+function undo() {
+  if (!S.cur || !S.canWrite) return;
+  if (!H.past.length) { toast('Nada para desfazer.'); return; }
+  H.future.push(JSON.stringify(S.cur)); S.cur = JSON.parse(H.past.pop()); H.key = null;
+  renderStudy(true); scheduleSave();
+}
+function redo() {
+  if (!S.cur || !S.canWrite) return;
+  if (!H.future.length) { toast('Nada para refazer.'); return; }
+  H.past.push(JSON.stringify(S.cur)); S.cur = JSON.parse(H.future.pop()); H.key = null;
+  renderStudy(true); scheduleSave();
+}
+document.addEventListener('keydown', e => {
+  if (!S.cur || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+});
+
+function setStatus(kind, text) { $('#status').innerHTML = `<i class="dot ${kind}"></i><span>${esc(text)}</span>`; }
+function renderTopUser() {
+  const el = $('#topUser'); if (!el) return;
+  if (S.mode === 'db') el.innerHTML = `<span class="who">${esc(S.email)}</span>${S.role === 'admin' ? `<a class="btn sm" href="#acessos">Acessos</a>` : ''}<button class="btn sm ghost" id="logoutBtn">Sair</button>`;
+  else if (S.mode === 'public') el.innerHTML = `<a class="btn sm" href="#inicio" id="goLogin">Entrar</a>`;
+  else el.innerHTML = '';
+  const br = document.querySelector('.brand'); if (br) br.setAttribute('href', homeHash());
+}
+
+/* ============ persistência ============ */
+function cleanBody(o) { const d = clone(o); ['_client', '_rev', 'id', 'atualizadoPor'].forEach(k => delete d[k]); return d; }
+function scheduleSave() {
+  if (!S.cur || !S.canWrite || S.mode !== 'db') return;
+  S.cur.atualizadoEm = Date.now();
+  setStatus('busy', 'Salvando…'); S.dirty = true;
+  clearTimeout(S.saveT); S.saveT = setTimeout(doSave, 900);
+}
+async function doSave() {
+  S.saveT = null;
+  if (!S.cur || !sb) return;
+  if (S.saving) { S.again = true; return; }
+  S.saving = true;
+  const id = S.curId, body = cleanBody(S.cur), myRev = S.rev;
+  try {
+    const { data, error } = await sb.from('estudos').update({dados: body, nome: body.nome || '', publico: !!body.publico, rev: myRev + 1, atualizado_em: new Date().toISOString(), atualizado_por: S.email}).eq('id', id).eq('rev', myRev).select('rev');
+    if (error) throw error;
+    if (!data || !data.length) { await handleConflict(id, body); }
+    else { S.rev = data[0].rev; if (!S.again) S.dirty = false; setStatus('', 'Salvo às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})); }
+  } catch (e) {
+    setStatus('err', 'Erro ao salvar. Confira a internet.');
+    toast('Não foi possível salvar: ' + (e?.message || 'erro desconhecido'));
+  }
+  S.saving = false;
+  if (S.again) { S.again = false; doSave(); }
+}
+async function handleConflict(id, mine) {
+  const { data } = await sb.from('estudos').select('*').eq('id', id).maybeSingle();
+  if (!data) { toast('Este estudo foi excluído por outra pessoa.'); location.hash = 'inicio'; return; }
+  try { await sb.from('estudo_versoes').insert({estudo_id:id, nome:'Minha edição (conflito) · ' + stamp(), dados:mine, criado_por:S.email}); } catch (e) {}
+  S.cur = fromRow(data); S.rev = data.rev; S.dirty = false; resetHist(); renderStudy(true); loadVersions();
+  toast(`${data.atualizado_por || 'Outra pessoa'} salvou antes de você. Carreguei a versão dela; a sua ficou guardada em Versões.`);
+  setStatus('', 'Atualizado');
+}
+function isEditing() { const a = document.activeElement; return a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && $('#study')?.contains(a); }
+
+async function createStudy(data) {
+  if (S.mode !== 'db' || !S.canWrite) return;
+  const id = 'e' + rid();
+  data.criadoEm = data.atualizadoEm = Date.now();
+  const body = cleanBody(data);
+  const { error } = await sb.from('estudos').insert({id, dados: body, nome: body.nome || '', publico: !!body.publico, rev: 1, atualizado_por: S.email});
+  if (error) { toast('Não foi possível criar o estudo: ' + error.message); return; }
+  location.hash = 'estudo-' + id;
+}
+async function deleteStudy(id) {
+  const { error } = await sb.from('estudos').delete().eq('id', id);
+  if (error) { toast('Não foi possível excluir: ' + error.message); return; }
+  location.hash = 'inicio';
+}
+function bumpRev(r) { const m = String(r||'R00').match(/^(\D*)(\d+)$/); return m ? m[1] + String(+m[2] + 1).padStart(m[2].length, '0') : (r || 'R00') + '-1'; }
+async function loadList() {
+  const q = sb.from('estudos').select('id,dados,publico,rev,atualizado_em,atualizado_por').order('atualizado_em', {ascending:false});
+  const { data, error } = S.mode === 'public' ? await q.eq('publico', true) : await q;
+  if (error) { setStatus('err', 'Erro ao carregar'); return false; }
+  S.list = (data || []).map(fromRow); S.listLoaded = true;
+  S.list.forEach(x => { S.local[x.id] = x; });
+  return true;
+}
+async function loadVersions() {
+  if (S.mode !== 'db' || !S.curId) return;
+  const id = S.curId;
+  const { data } = await sb.from('estudo_versoes').select('*').eq('estudo_id', id).order('criado_em', {ascending:false});
+  if (S.curId !== id) return;
+  S.versions = (data || []).map(v => ({id:v.id, nome:v.nome, dados:v.dados, criadoEm: Date.parse(v.criado_em), criadoPor: v.criado_por}));
+  if (S.panel === 'versions') renderDrawer();
+  const vb = $('#verCount'); if (vb) vb.textContent = S.versions.length ? `(${S.versions.length})` : '';
+}
+async function pollStudy() {
+  if (S.mode !== 'db' || !S.curId || document.hidden) return;
+  const id = S.curId;
+  const { data } = await sb.from('estudos').select('*').eq('id', id).maybeSingle();
+  if (S.curId !== id) return;
+  if (!data) { toast('Este estudo foi excluído por outra pessoa.'); location.hash = 'inicio'; return; }
+  if (data.rev > S.rev) {
+    if (isEditing() || S.saving || S.dirty) { S.pendingRemote = data; return; }
+    S.cur = fromRow(data); S.rev = data.rev; resetHist(); renderStudy(true); toast(`Estudo atualizado por ${data.atualizado_por || 'outra pessoa'}.`);
+  }
+}
+
+/* ============ roteamento ============ */
+function route() {
+  const h = location.hash.slice(1);
+  if (S.mode === 'connecting') return;
+  if (S.mode === 'login') { if (h === 'publico' || h.startsWith('publico-')) { boot(); return; } renderLogin(); return; }
+  if (S.mode === 'public') {
+    if (!(h === 'publico' || h.startsWith('publico-'))) { boot(); return; }
+    if (h.startsWith('publico-')) openStudy(h.slice(8)); else { closeStudy(); renderList(); }
+    return;
+  }
+  if (h === 'publico' || h.startsWith('publico-')) { boot(); return; }
+  if (h === 'acessos') { closeStudy(); renderAcessos(); return; }
+  if (h.startsWith('estudo-')) openStudy(h.slice(7)); else { closeStudy(); renderList(); loadList().then(ok => { if (ok && !S.curId && location.hash.slice(1) !== 'acessos') renderList(); }); }
+}
+function closeStudy() {
+  clearInterval(S.pollT); S.pollT = null;
+  S.cur = null; S.curId = null; S.versions = []; S.panel = null; S.pendingRemote = null; resetHist();
+}
+async function openStudy(id) {
+  if (S.curId === id && S.cur) return;
+  closeStudy(); S.curId = id; S.confirmDel = false; S.tool = null; S.newPavFor = null;
+  $('#app').innerHTML = `<div class="wrap"><div class="empty" style="margin-top:30px">Carregando estudo…</div></div>`;
+  if (S.mode === 'public') {
+    if (!S.local[id]) await loadList();
+    if (S.curId !== id) return;
+    if (!S.local[id]) { renderMissing(); return; }
+    S.cur = clone(S.local[id]); renderStudy(); return;
+  }
+  const { data, error } = await sb.from('estudos').select('*').eq('id', id).maybeSingle();
+  if (S.curId !== id) return;
+  if (error || !data) { renderMissing(); return; }
+  S.cur = fromRow(data); S.rev = data.rev; renderStudy();
+  loadVersions();
+  S.pollT = setInterval(pollStudy, 12000);
+}
+function renderMissing() { $('#app').innerHTML = `<div class="wrap"><div class="empty" style="margin-top:30px"><h3>Estudo não encontrado</h3><p>Ele pode ter sido excluído ou não estar público.</p><a class="btn" href="${homeHash()}">Ver todos os estudos</a></div></div>`; }
+
+/* ============ lista ============ */
+function renderList() {
+  const items = [...S.list].sort((a, b) => num(b.atualizadoEm) - num(a.atualizadoEm));
+  const banner = S.mode === 'public' ? `<div class="banner">Versão para consulta: você pode ver os estudos e baixar o PDF. Os números são sempre os mais recentes.</div>`
+    : !S.canWrite ? `<div class="banner">Seu acesso é de leitura: você pode ver e exportar, mas não alterar.</div>` : '';
+  const nPub = S.list.filter(x => x.publico).length;
+  const pubUrl = location.origin + location.pathname + '#publico';
+  const pubBox = S.mode === 'db' && S.role === 'admin' ? `<div class="pubbox"><div><b>Link público (sem login)</b><p>Quem abre este link vê, sem senha, só os estudos marcados como públicos (${nPub} agora), sempre atualizados: ${esc(pubUrl)}</p></div><button class="btn sm" data-copy="${esc(pubUrl)}">Copiar link público</button></div>` : '';
+  const cards = items.map(st => {
+    const c = calc(st);
+    return `<a class="card" href="${studyHash(esc(st.id))}" style="text-decoration:none">
+      <div class="rev">${esc(st.revisao || 'R00')} · ${fDate(st.data)}</div>
+      <div><h3>${esc(st.nome || 'Sem nome')}</h3><div class="sub">${esc([st.cliente, st.local].filter(Boolean).join(' · ') || st.endereco || '')}</div></div>
+      <div class="figs">
+        <div class="fig"><small>VGV</small><b>${fM(c.vgv)}</b></div>
+        <div class="fig"><small>Lucro</small><b>${fM(c.lucro)}</b></div>
+        <div class="fig"><small>Margem</small><b><span class="pill ${margemCls(c.margem)}">${fP(c.margem)}</span></b></div>
+      </div>
+      <div class="sub" style="font-size:12px">${c.nUn} unidades · ${fN(st.areaConstruida,0)} m² construídos${st.publico && S.mode === 'db' ? ' · <span class="tag pub">público</span>' : ''}${st.atualizadoPor && S.mode === 'db' ? `<br>Atualizado por ${esc(st.atualizadoPor)} ${ago(st.atualizadoEm)}` : ''}</div>
+    </a>`;
+  }).join('');
+  $('#app').innerHTML = `<div class="wrap">${banner}${pubBox}
+    <div class="listhead"><div><h1>Estudos de viabilidade</h1><p>${S.mode === 'public' ? 'Cada estudo mostra VGV, custos, lucro e a lista de unidades. Abra um estudo para ver os detalhes e baixar o PDF.' : 'Cada estudo calcula VGV, custos e lucro a partir das unidades, do CUB e das outorgas. Tudo é editável e fica salvo para quem tem acesso.'}</p></div>
+    <div class="spacer"></div>${S.canWrite ? `<button class="btn pri" id="newStudy">${ICON.plus}Novo estudo</button>` : ''}</div>
+    ${S.mode === 'connecting' || (S.mode === 'db' && !S.listLoaded && !items.length) ? `<div class="empty">Carregando estudos…</div>` : items.length ? `<div class="cards">${cards}</div>` :
+      `<div class="empty"><h3>Nenhum estudo ainda</h3><p>Crie o primeiro estudo e preencha terreno, unidades e custos. Os resultados aparecem na hora.</p>${S.canWrite ? `<button class="btn pri" id="newStudy2">${ICON.plus}Criar primeiro estudo</button>` : ''}</div>`}
+  </div>`;
+  const prev = items[0];
+  $('#newStudy')?.addEventListener('click', () => createStudy(blankStudy(prev)));
+  $('#newStudy2')?.addEventListener('click', () => createStudy(blankStudy(prev)));
+}
+
+/* ============ campos ============ */
+function numIn(bind, v, opt={}) {
+  const d = opt.d ?? 2;
+  return `<div class="inp">${opt.pre ? `<span class="pre">${opt.pre}</span>` : ''}<input class="n" id="${esc(bind)}" data-bind="${esc(bind)}" data-t="num" data-d="${d}" inputmode="decimal" value="${v === null || v === undefined || v === '' ? '' : fN(v, d)}" ${opt.ph ? `placeholder="${esc(opt.ph)}"` : ''}>${opt.u ? `<span class="u">${opt.u}</span>` : ''}</div>`;
+}
+function txtIn(bind, v, type='text') { return `<div class="inp"><input id="${esc(bind)}" data-bind="${esc(bind)}" data-t="${type === 'date' ? 'date' : 'text'}" type="${type}" value="${esc(v)}"></div>`; }
+function field(label, inner, hint) { return `<div class="f"><label>${label}</label>${inner}${hint ? `<div class="hint">${hint}</div>` : ''}</div>`; }
+function cellNum(bind, v, d=2, ph) { return `<input class="cell n" id="${esc(bind)}" data-bind="${esc(bind)}" data-t="num" data-d="${d}" inputmode="decimal" value="${v === null || v === undefined || v === '' ? '' : fN(v, d)}" ${ph ? `placeholder="${esc(ph)}"` : ''}>`; }
+function cellTxt(bind, v) { return `<input class="cell" id="${esc(bind)}" data-bind="${esc(bind)}" data-t="text" value="${esc(v)}">`; }
+
+/* ============ estudo ============ */
+function renderStudy(keepScroll) {
+  const s = S.cur; if (!s) return;
+  const y = window.scrollY;
+  const c = calc(s);
+  const ro = !S.canWrite;
+  const banner = S.mode === 'public' ? `<div class="banner">Versão para consulta: você pode ver e exportar o PDF.</div>` : S.mode === 'local' ? `<div class="banner">Modo local: nada fica salvo neste visualizador.</div>` : ro ? `<div class="banner">Modo leitura: você pode ver e exportar, mas não alterar.</div>` : '';
+  $('#app').innerHTML = `
+  <div class="sumbar"><div class="wrap" id="sumbar">${sumbarHTML(c)}</div></div>
+  <div class="wrap">${banner}
+  <div class="layout">
+    <nav class="toc">
+      <a class="back" href="${homeHash()}">← Todos os estudos</a>
+      <a href="#s1"><span>01</span>Identificação</a><a href="#s2"><span>02</span>Terreno e áreas</a><a href="#sq"><span>03</span>Quadro de áreas</a>
+      <a href="#s3"><span>04</span>Custo de obra</a>
+      <a href="#s4"><span>05</span>Outorgas</a><a href="#s5"><span>06</span>Unidades e vendas</a><a href="#s6"><span>07</span>Outros custos</a>
+      <a href="#s7"><span>08</span>Resultado</a><a href="#s8"><span>09</span>Observações</a>
+    </nav>
+    <main id="study" class="${ro ? 'ro' : ''}">
+      ${secIdent(s)}${secTerreno(s, c)}${secQuadro(s, c)}${secObra(s, c)}${secOutorgas(s, c)}${secUnidades(s, c)}${secCustos(s, c)}
+      <section class="sec" id="s7"><header><span class="n">08</span><h2>Resultado</h2><p>Atualiza sozinho a cada mudança. A tabela de sensibilidade mostra a margem se o preço de venda ou o custo de obra variarem.</p></header><div class="body" id="results">${resultsHTML(s, c)}</div></section>
+      <section class="sec" id="s8"><header><span class="n">09</span><h2>Observações</h2><p>Premissas, fontes e ressalvas. Saem no final do PDF.</p></header><div class="body"><textarea id="notas" data-bind="s.notas" data-t="text" placeholder="Ex.: CUB/SC de outubro/2026, padrão R8-N. Preços de venda com base em pesquisa de mercado no bairro.">${esc(s.notas)}</textarea>
+      <div class="toolrow" style="margin-top:16px;border-top:1px solid var(--line2);padding-top:14px">
+        ${ro ? '' : `<button class="btn" id="dupStudy">${ICON.copy}Duplicar como nova revisão</button>
+        <button class="btn danger ${S.confirmDel ? 'confirm' : ''}" id="delStudy">${S.confirmDel ? 'Clique de novo para excluir' : 'Excluir estudo'}</button>`}
+      </div></div></section>
+    </main>
+  </div></div>
+  <aside class="drawer" id="drawer" ${S.panel ? '' : 'hidden'}></aside>`;
+  if (ro) document.querySelectorAll('#study input,#study select,#study textarea').forEach(el => el.disabled = true);
+  if (S.panel) renderDrawer();
+  if (keepScroll) window.scrollTo(0, y);
+}
+function sumbarHTML(c) {
+  const ed = S.canWrite, dbm = S.mode === 'db';
+  return `<a class="btn sm ghost" href="${homeHash()}" title="Todos os estudos">←</a>
+    <div class="sumk big"><small>VGV</small><b data-out="vgv">${fM(c.vgv)}</b></div>
+    <div class="sumk"><small>Custo total</small><b>${fM(c.total)}</b></div>
+    <div class="sumk big"><small>Lucro estimado</small><b>${fM(c.lucro)}</b></div>
+    <div class="sumk"><small>Margem s/ VGV</small><b><span class="pill ${margemCls(c.margem)}">${fP(c.margem)}</span></b></div>
+    <div class="actions">
+      ${ed ? `<span class="ur"><button class="btn sm" id="undoBtn" title="Desfazer (Ctrl+Z)" ${H.past.length ? '' : 'disabled'}>${ICON.undo}</button><button class="btn sm" id="redoBtn" title="Refazer (Ctrl+Y)" ${H.future.length ? '' : 'disabled'}>${ICON.redo}</button></span>` : ''}
+      ${ed && dbm ? `<button class="btn sm" id="saveVerBtn">${ICON.save}Salvar versão</button>` : ''}
+      ${dbm ? `<button class="btn sm" id="versBtn">${ICON.hist}Versões <span id="verCount">${S.versions.length ? `(${S.versions.length})` : ''}</span></button>` : ''}
+      <button class="btn sm" id="xlsBtn">${ICON.xls}Excel</button><button class="btn sm pri" id="pdfBtn">${ICON.pdf}Exportar PDF</button></div>`;
+}
+function stamp() { return new Date().toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}).replace(',', ''); }
+function renderDrawer() {
+  const el = $('#drawer'); if (!el) return;
+  el.hidden = !S.panel; if (!S.panel) return;
+  const head = (t) => `<div class="dhead"><h2>${t}</h2><button class="btn sm ghost" id="closeDrawer" title="Fechar">${ICON.x}</button></div>`;
+  if (S.panel === 'save') {
+    const c = calc(S.cur);
+    el.innerHTML = `${head('Salvar versão')}
+      <p class="dnote">Guarda uma cópia do estudo como está agora. Você pode voltar para ela quando quiser pelo botão Versões. As alterações do dia a dia continuam sendo salvas sozinhas.</p>
+      <div class="f"><label for="verName">Nome da versão</label><div class="inp"><input id="verName" value="${esc((S.cur.revisao || 'R00') + ' · ' + stamp())}"></div></div>
+      <div class="vsum"><span>VGV <b>${fM(c.vgv)}</b></span><span>Lucro <b>${fM(c.lucro)}</b></span><span>Margem <b>${fP(c.margem)}</b></span></div>
+      ${S.canPublish && S.cur.publico ? `<label class="chk"><input type="checkbox" id="verPub" checked> Atualizar também o link público</label>` : ''}
+      <button class="btn pri" id="verGo">${ICON.save}Salvar versão</button>`;
+    setTimeout(() => $('#verName')?.select(), 30);
+    return;
+  }
+  const items = S.versions.map(v => {
+    const c = calc(v.dados || {});
+    const conf = S.confirmV === v.id ? 'restore' : S.confirmV === 'del:' + v.id ? 'del' : null;
+    return `<div class="ver">
+      <div class="vt"><b>${esc(v.nome)}</b><span>${new Date(num(v.criadoEm)).toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'})}</span></div>
+      <div class="vsum"><span>VGV <b>${fM(c.vgv)}</b></span><span>Lucro <b>${fM(c.lucro)}</b></span><span>Margem <b class="pill ${margemCls(c.margem)}">${fP(c.margem)}</b></span><span>${c.nUn} un.</span></div>
+      <div class="vact">
+        ${S.canWrite ? `<button class="btn sm ${conf === 'restore' ? 'confirm' : ''}" data-vrest="${esc(v.id)}">${conf === 'restore' ? 'Confirmar: voltar para esta' : 'Restaurar'}</button>` : ''}
+        <button class="btn sm" data-vpdf="${esc(v.id)}">${ICON.pdf}PDF</button>
+        ${S.canWrite ? `<button class="btn sm ghost danger ${conf === 'del' ? 'confirm' : ''}" data-vdel="${esc(v.id)}">${conf === 'del' ? 'Confirmar exclusão' : 'Excluir'}</button>` : ''}
+      </div></div>`;
+  }).join('');
+  el.innerHTML = `${head('Versões salvas')}
+    <p class="dnote">Restaurar troca o estudo atual pela versão escolhida. Antes disso, o estado atual é guardado como "Antes de restaurar", então nada se perde.</p>
+    ${items || `<div class="empty" style="padding:24px 14px">Nenhuma versão salva ainda. Use "Salvar versão" para guardar a primeira.</div>`}`;
+}
+async function flushSave() { if (S.saveT) { clearTimeout(S.saveT); S.saveT = null; } if (S.dirty || S.saving) { await doSave(); } }
+async function addVersion(nome, dados) {
+  const d = clone(dados); delete d._client;
+  ['_rev', 'id', 'atualizadoPor'].forEach(k => delete d[k]);
+  const { error } = await sb.from('estudo_versoes').insert({estudo_id: S.curId, nome, dados: d, criado_por: S.email});
+  if (error) throw error;
+  loadVersions();
+}
+function secIdent(s) {
+  const c = (k, label, cls='') => `<div class="c ${cls}"><label for="s.${k}">${label}</label><input id="s.${k}" data-bind="s.${k}" data-t="text" value="${esc(s[k])}"></div>`;
+  return `<section class="sec" id="s1"><header><span class="n">01</span><h2>Identificação</h2><p>Os dados do carimbo, como na prancha. Aparecem no cabeçalho do PDF.</p></header><div class="body">
+  <div class="carimbo">
+    ${c('nome', 'Empreendimento', 'wide title')}
+    ${c('cliente', 'Cliente')}${c('revisao', 'Revisão')}<div class="c"><label for="s.data">Data</label><input id="s.data" type="date" data-bind="s.data" data-t="date" value="${esc(s.data)}"></div>
+    ${c('endereco', 'Endereço / projeto')}${c('descricao', 'Uso')}${c('local', 'Bairro / cidade')}
+    ${c('empresa', 'Empresa')}${c('responsavel', 'Responsável técnico')}<div class="c"></div>
+  </div>
+  ${S.mode === 'db' ? `<label class="chk" style="margin-top:12px"><input type="checkbox" id="s.publico" data-bind="s.publico" data-t="bool" ${s.publico ? 'checked' : ''}> Mostrar este estudo no link público (qualquer pessoa vê, sem login)</label>` : ''}
+  </div></section>`;
+}
+function secTerreno(s, c) {
+  return `<section class="sec" id="s2"><header><span class="n">02</span><h2>Terreno e áreas</h2><p>Dados do quadro estatístico. Só a área construída entra no cálculo; os demais servem de referência no relatório.</p></header><div class="body">
+  <div class="grid">
+    ${field('Área do terreno', numIn('s.terreno', s.terreno, {u:'m²'}))}
+    ${field('Taxa de ocupação', numIn('s.to', s.to, {u:'%'}))}
+    ${field('Coef. de aproveitamento', numIn('s.ca', s.ca, {d:2}))}
+    ${field('Taxa de permeabilidade', numIn('s.permeab', s.permeab, {u:'%'}))}
+    ${field('Vagas de garagem', numIn('s.vagas', s.vagas, {d:0}))}
+    ${field('Pavimentos', numIn('s.pavimentos', s.pavimentos, {d:0}))}
+  </div>
+  <div class="grid" style="margin-top:16px;border-top:1px solid var(--line2);padding-top:16px">
+    ${field('Área total construída', numIn('s.areaConstruida', s.areaConstruida, {u:'m²'}), 'Base do custo de obra')}
+    ${field('Área de lazer', numIn('s.areaLazer', s.areaLazer, {u:'m²'}))}
+    ${field('Área privativa (soma das unidades)', `<div class="calc" data-out="areaPriv">${fN(c.areaPriv)} m²</div>`)}
+    ${field('Eficiência (privativa ÷ construída)', `<div class="calc" data-out="eficiencia">${fP(c.eficiencia)}</div>`)}
+  </div></div></section>`;
+}
+function quadroWarn(s) {
+  const t = quadroTotal(s), a = num(s.areaConstruida);
+  if (!t || Math.abs(t - a) < 0.01) return t ? `<div class="alert ok">O total do quadro bate com a área total construída usada no custo de obra.</div>` : '';
+  return `<div class="alert">O total do quadro (${fN(t)} m²) está diferente da área total construída usada no custo de obra (${fN(a)} m²).${S.canWrite ? ` <button class="btn sm" id="useQuadro">Usar ${fN(t)} m² como área construída</button>` : ''}</div>`;
+}
+function secQuadro(s, c) {
+  if (!Array.isArray(s.quadroAreas)) s.quadroAreas = [];
+  if (!Array.isArray(s.dadosUrb)) s.dadosUrb = [];
+  const rows = s.quadroAreas.map((q, i) => `<tr>
+    <td style="min-width:180px">${cellTxt(`q.${i}.desc`, q.desc)}</td>
+    <td style="min-width:150px">${cellTxt(`q.${i}.obs`, q.obs)}</td>
+    <td style="width:90px">${cellNum(`q.${i}.qtd`, q.qtd, 0)}</td>
+    <td style="width:130px">${cellNum(`q.${i}.area`, q.area)}</td>
+    <td class="out" data-qv="${i}">${fN(num(q.qtd) * num(q.area))} m²</td>
+    <td style="width:36px"><button class="del" data-del="q.${i}" title="Remover linha">${ICON.x}</button></td></tr>`).join('');
+  const urb = s.dadosUrb.map((d, i) => `<tr>
+    <td style="min-width:220px">${cellTxt(`d.${i}.desc`, d.desc)}</td>
+    <td style="width:100px">${cellNum(`d.${i}.pct`, d.pct, 2)}</td>
+    <td style="min-width:150px"><input class="cell n" id="d.${i}.valor" data-bind="d.${i}.valor" data-t="text" value="${esc(d.valor)}"></td>
+    <td style="width:36px"><button class="del" data-del="d.${i}" title="Remover linha">${ICON.x}</button></td></tr>`).join('');
+  return `<section class="sec" id="sq"><header><span class="n">03</span><h2>Quadro de áreas</h2><p>Visão geral das áreas por pavimento e dos dados urbanísticos, como no quadro da prancha. Tudo é editável e sai no PDF.</p></header><div class="body">
+  <h3 class="mini">Quadro de áreas</h3>
+  <div class="tw qa"><table>
+    <thead><tr><th>Pavimento</th><th>Observação</th><th class="r">Repetições</th><th class="r">Área (m²)</th><th class="r">Total</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="6" style="padding:14px;color:var(--muted)">Nenhuma linha.</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="4">TOTAL</td><td class="out" data-out="qtot">${fN(quadroTotal(s))} m²</td><td></td></tr></tfoot>
+  </table></div>
+  <div class="toolrow"><button class="btn sm" data-add="q">${ICON.plus}Adicionar linha</button></div>
+  <div id="qwarn" class="alerts" style="margin-top:10px">${quadroWarn(s)}</div>
+  <h3 class="mini" style="margin-top:24px">Dados urbanísticos</h3>
+  <div class="tw qa"><table>
+    <thead><tr><th>Item</th><th class="r">%</th><th class="r">Valor</th><th></th></tr></thead>
+    <tbody>${urb || `<tr><td colspan="4" style="padding:14px;color:var(--muted)">Nenhuma linha.</td></tr>`}</tbody>
+  </table></div>
+  <div class="toolrow"><button class="btn sm" data-add="d">${ICON.plus}Adicionar linha</button><button class="btn sm" id="fillUrb" title="Preenche nº de unidades, área comum e área residencial">Preencher com os números do estudo</button></div>
+  </div></section>`;
+}
+function fillUrbanos(s) {
+  const c = calc(s);
+  const nRes = (s.unidades || []).length;
+  const vals = {
+    'número de unidades': {valor: `${c.nUn} UNI.`},
+    'número de unidades residenciais': {valor: String(nRes)},
+    'área comum': {valor: num(s.areaConstruida) ? fN(num(s.areaConstruida) - c.areaPriv) + ' m²' : ''},
+    'área residencial': {valor: fN(c.areaPriv) + ' m²', pct: Math.round(c.eficiencia * 10000) / 100},
+  };
+  const seen = new Set();
+  s.dadosUrb.forEach(d => { const k = String(d.desc || '').trim().toLowerCase(); if (vals[k]) { Object.assign(d, vals[k]); seen.add(k); } });
+  Object.entries(vals).forEach(([k, v]) => { if (!seen.has(k)) s.dadosUrb.push({id:rid(), desc:k.charAt(0).toUpperCase() + k.slice(1), pct:null, valor:'', ...v}); });
+}
+function secObra(s, c) {
+  return `<section class="sec" id="s3"><header><span class="n">04</span><h2>Custo de obra</h2><p>Custo por m² = CUB × fator. O fator cobre o que o CUB não inclui (fundações, elevadores, BDI etc.).</p></header><div class="body">
+  <div class="grid">
+    ${field('CUB/SC', numIn('s.cub', s.cub, {pre:'R$', u:'/m²'}))}
+    ${field('Mês de referência do CUB', txtIn('s.cubRef', s.cubRef))}
+    ${field('Fator sobre o CUB', numIn('s.fatorCub', s.fatorCub, {d:2, u:'× CUB'}), 'Ex.: 1,40 = 40% acima do CUB')}
+  </div>
+  <div class="formula"><span>Custo/m² de obra</span><b data-out="custoM2Obra">${fR(c.custoM2Obra, 2)}</b><span>×</span><b data-out="areaC">${fN(s.areaConstruida)} m²</b><span>=</span><b data-out="obra">${fR(c.obra)}</b></div>
+  </div></section>`;
+}
+function secOutorgas(s, c) {
+  const rows = (s.outorgas || []).map((o, i) => `<tr>
+    <td>${cellTxt(`o.${i}.desc`, o.desc)}</td>
+    <td style="width:150px">${cellNum(`o.${i}.area`, o.area)}</td>
+    <td style="width:110px">${cellNum(`o.${i}.pct`, o.pct, 2)}</td>
+    <td class="out" data-ov="${i}">${fR(c.ov[i])}</td>
+    <td style="width:36px"><button class="del" data-del="o.${i}" title="Remover">${ICON.x}</button></td></tr>`).join('');
+  return `<section class="sec" id="s4"><header><span class="n">05</span><h2>Outorgas</h2><p>Outorga onerosa por pavimento ou acréscimo de área. Valor = área × CUB × percentual.</p></header><div class="body">
+  <div class="tw"><table><thead><tr><th>Descrição</th><th class="r">Área (m²)</th><th class="r">% do CUB</th><th class="r">Valor</th><th></th></tr></thead>
+  <tbody>${rows || `<tr><td colspan="5" style="padding:14px;color:var(--muted)">Nenhuma outorga. Adicione se o projeto usa área extra.</td></tr>`}</tbody>
+  <tfoot><tr><td colspan="3">Total de outorgas</td><td class="out" data-out="outorga">${fR(c.outorga)}</td><td></td></tr></tfoot></table></div>
+  <div class="toolrow"><button class="btn sm" data-add="o">${ICON.plus}Adicionar outorga</button></div>
+  </div></section>`;
+}
+function secUnidades(s, c) {
+  const groups = groupsOf(s);
+  const pavs = [...groups.keys()];
+  let body = '';
+  for (const [pav, idx] of groups) {
+    const area = idx.reduce((a, i) => a + num(s.unidades[i].area), 0), val = idx.reduce((a, i) => a + c.uv[i], 0);
+    const fp = s.unidades[idx[0]].fpav;
+    body += `<tr class="grp"><td colspan="4">${esc(pav)}<span class="gmeta">${idx.length} un. · ${fN(area)} m²</span></td>
+      <td style="width:96px"><input class="cell n" data-grp="${esc(pav)}" title="Aplicar fator a todo o pavimento" value="${fN(fp, 2)}" inputmode="decimal"></td><td colspan="2"></td>
+      <td class="out" data-gv="${esc(pav)}">${fR(val)}</td><td colspan="2" style="text-align:right"><button class="btn sm ghost" data-addpav="${esc(pav)}" title="Adicionar unidade neste pavimento">${ICON.plus}Unidade</button></td></tr>`;
+    for (const i of idx) {
+      const u = s.unidades[i];
+      body += `<tr class="${u.tipo === 'permuta' ? 'perm' : ''}">
+        <td style="min-width:96px">${cellTxt(`u.${i}.nome`, u.nome)}</td>
+        <td style="min-width:140px;width:140px">${S.newPavFor === i
+          ? `<input class="cell" id="u.${i}.pav" data-bind="u.${i}.pav" data-t="text" data-newpav="1" value="" placeholder="Nome do novo pavimento">`
+          : `<select class="cell" id="u.${i}.pav" data-pavsel="${i}" title="Mudar de pavimento">${pavs.map(p => `<option value="${esc(p)}" ${p === pavKey(u) ? 'selected' : ''}>${esc(p)}</option>`).join('')}<option value="__new__">+ Novo pavimento…</option></select>`}</td>
+        <td style="width:84px">${cellNum(`u.${i}.area`, u.area)}</td>
+        <td style="width:70px">${cellNum(`u.${i}.fpos`, u.fpos)}</td>
+        <td style="width:70px">${cellNum(`u.${i}.fpav`, u.fpav)}</td>
+        <td style="width:112px">${cellNum(`u.${i}.pm`, u.pm, 2, fN(s.precoBase, 2))}</td>
+        <td class="out adot" data-ua="${i}" title="R$/m² base × fator posição × fator pavimento">${fN(precoAdotado(s, u), 2)}</td>
+        <td class="out" data-uv="${i}">${fR(c.uv[i])}</td>
+        <td style="width:112px"><select class="cell" id="u.${i}.tipo" data-bind="u.${i}.tipo" data-t="sel"><option value="venda" ${u.tipo !== 'permuta' ? 'selected' : ''}>Venda</option><option value="permuta" ${u.tipo === 'permuta' ? 'selected' : ''}>Permuta</option></select></td>
+        <td style="width:36px"><button class="del" data-del="u.${i}" title="Remover unidade">${ICON.x}</button></td></tr>`;
+    }
+  }
+  const firstPav = pavs[pavs.length - 1] || '';
+  const tool = S.tool === 'addu' ? `<div class="tool">
+      ${field('Pavimento', `<div class="inp"><select id="adPav">${pavs.map(p => `<option value="${esc(p)}" ${p === firstPav ? 'selected' : ''}>${esc(p)}</option>`).join('')}<option value="__new__" ${pavs.length ? '' : 'selected'}>+ Novo pavimento…</option></select></div>`)}
+      <div class="f" id="adNewWrap" ${pavs.length ? 'hidden' : ''}><label for="adNew">Nome do novo pavimento</label><div class="inp"><input id="adNew" placeholder="Ex.: 6º pavimento"></div></div>
+      ${field('Unidade', `<div class="inp"><input id="adNome" value="${esc(pavs.length ? nextUnitName(s, groups.get(firstPav) || []) : 'Apto 101')}"></div>`)}
+      ${field('Área', `<div class="inp"><input id="adArea" class="n" inputmode="decimal" placeholder="0,00"><span class="u">m²</span></div>`)}
+      ${field('Tipo', `<div class="inp"><select id="adTipo"><option value="venda">Venda</option><option value="permuta">Permuta</option></select></div>`)}
+      <button class="btn pri sm" id="adGo">${ICON.plus}Adicionar</button><button class="btn sm ghost" data-tool="">Cancelar</button>
+    </div>` : S.tool === 'dup' ? `<div class="tool">
+      ${field('Copiar o pavimento', `<div class="inp"><select id="dupSrc">${pavs.map(p => `<option>${esc(p)}</option>`).join('')}</select></div>`)}
+      ${field('Nome do novo pavimento', `<div class="inp"><input id="dupName" placeholder="Ex.: 6º pavimento"></div>`)}
+      ${field('Trocar início do número', `<div class="inp"><input id="dupFrom" placeholder="2" style="text-align:center"></div>`)}
+      ${field('por', `<div class="inp"><input id="dupTo" placeholder="6" style="text-align:center"></div>`)}
+      <button class="btn pri sm" id="dupGo">Copiar pavimento</button><button class="btn sm ghost" data-tool="">Cancelar</button>
+    </div>` : '';
+  return `<section class="sec" id="s5"><header><span class="n">06</span><h2>Unidades e vendas</h2><p>Valor da unidade = área × preço/m² × fator de posição × fator de pavimento. Unidades de permuta entram no VGV e também como custo (pagamento do terreno), sem corretagem nem imposto.</p></header><div class="body">
+  <div class="grid">
+    ${field('Preço base de venda', numIn('s.precoBase', s.precoBase, {pre:'R$', u:'/m²'}), 'Vale para toda unidade sem preço próprio')}
+    ${field('Corretagem', numIn('s.comissao', s.comissao, {u:'% das vendas'}))}
+    ${field('Impostos', numIn('s.imposto', s.imposto, {u:'% das vendas'}))}
+    ${field('VGV / m² privativo', `<div class="calc" data-out="vgvM2">${fR(c.vgvM2, 2)}</div>`)}
+  </div>
+  <div class="tw" style="margin-top:16px"><table>
+    <thead><tr><th>Unidade</th><th>Pavimento</th><th class="r">Área m²</th><th class="r" title="Fator de posição">F. posição</th><th class="r" title="Fator de pavimento">F. pav.</th><th class="r" title="Vazio = usa o preço base">R$/m² base</th><th class="r" title="Base × fator posição × fator pavimento">R$/m² adotado</th><th class="r">Valor</th><th>Tipo</th><th></th></tr></thead>
+    <tbody>${body || `<tr><td colspan="10" style="padding:14px;color:var(--muted)">Nenhuma unidade.</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="2"><span data-out="nUn">${c.nUn} unidades</span> · <span data-out="nPerm">${c.nPerm} em permuta</span></td><td class="out" data-out="areaPriv2">${fN(c.areaPriv)}</td><td colspan="3"></td><td class="out" data-out="vgvM2b" title="Média ponderada pela área">${fR(c.vgvM2, 2)}</td><td class="out" data-out="vgv2">${fR(c.vgv)}</td><td colspan="2"></td></tr></tfoot>
+  </table></div>
+  <div class="legend"><span><i style="background:var(--accent-soft)"></i>Linha do pavimento: o fator digitado ali vale para todas as unidades do andar</span><span><i style="background:var(--sand)"></i>Unidade de permuta</span><span>R$/m² próprio vazio = usa o preço base</span><span>A lista se organiza sozinha por andar e número. Para trocar uma unidade de andar, escolha outro na coluna Pavimento.</span></div>
+  <div class="toolrow"><button class="btn sm" data-tool="addu">${ICON.plus}Adicionar unidade</button><button class="btn sm" data-tool="dup">${ICON.copy}Copiar pavimento inteiro</button></div>
+  ${tool}
+  </div></section>`;
+}
+function secCustos(s, c) {
+  const rows = (s.custos || []).map((x, i) => `<tr>
+    <td>${cellTxt(`c.${i}.desc`, x.desc)}</td>
+    <td style="width:190px"><select class="cell" id="c.${i}.modo" data-bind="c.${i}.modo" data-t="sel">${Object.entries(MODOS).map(([k, v]) => `<option value="${k}" ${x.modo === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+    <td style="width:150px">${cellNum(`c.${i}.valor`, x.valor, 2)}</td>
+    <td class="out" data-cv="${i}">${fR(c.cv[i])}</td>
+    <td style="width:36px"><button class="del" data-del="c.${i}" title="Remover">${ICON.x}</button></td></tr>`).join('');
+  return `<section class="sec" id="s6"><header><span class="n">07</span><h2>Outros custos</h2><p>Marketing, projetos, jurídico, reservas. Cada custo pode ser um valor fixo ou um percentual do VGV ou da obra.</p></header><div class="body">
+  <div class="tw"><table><thead><tr><th>Descrição</th><th>Como calcular</th><th class="r">Valor ou %</th><th class="r">Resultado</th><th></th></tr></thead>
+  <tbody>${rows || `<tr><td colspan="5" style="padding:14px;color:var(--muted)">Nenhum custo extra.</td></tr>`}</tbody></table></div>
+  <div class="toolrow"><button class="btn sm" data-add="c">${ICON.plus}Adicionar custo</button></div>
+  </div></section>`;
+}
+function resultsHTML(s, c) {
+  const maxV = Math.max(c.vgv, c.total, 1);
+  const bars = c.items.filter(x => x.v).map(x => `<div class="bar ${x.k === 'permuta' ? 'perm' : ''}"><div class="lbl"><span>${esc(x.label)}</span><span class="num">${fR(x.v)} · ${fP(c.vgv ? x.v / c.vgv : 0)}</span></div><div class="track"><div class="fill" style="width:${Math.max(0, x.v / maxV * 100)}%"></div></div></div>`).join('');
+  const sens = `<table class="sens"><thead><tr><th>Preço ↓ / Obra →</th>${D_OBRA.map(d => `<th>${d > 0 ? '+' : ''}${Math.round(d * 100)}%</th>`).join('')}</tr></thead><tbody>
+    ${D_PRECO.map(dp => `<tr><td class="h">${dp > 0 ? '+' : ''}${Math.round(dp * 100)}%</td>${D_OBRA.map(dO => { const r = calc(s, {dPreco:dp, dObra:dO}); const cl = r.margem >= 0.2 ? 'g' : r.margem >= 0.1 ? 'w' : 'b'; return `<td class="${cl} ${dp === 0 && dO === 0 ? 'base' : ''}" title="Lucro ${fR(r.lucro)}">${fP(r.margem)}</td>`; }).join('')}</tr>`).join('')}
+  </tbody></table>`;
+  const al = alertsOf(s, c);
+  return `<div class="kpis">
+    <div class="kpi"><small>VGV</small><b>${fR(c.vgv)}</b><span>${c.nUn} unidades · ticket médio ${fM(c.ticket)}</span></div>
+    <div class="kpi"><small>Custo total</small><b>${fR(c.total)}</b><span>${fR(c.custoM2, 2)} por m² construído</span></div>
+    <div class="kpi hero"><small>Lucro estimado</small><b>${fR(c.lucro)}</b><span>Margem ${fP(c.margem)} sobre o VGV</span></div>
+    <div class="kpi"><small>Lucro ÷ custo de obra</small><b>${fP(c.sobreObra)}</b><span>Lucro ÷ custo total ${fP(c.sobreCusto)}</span></div>
+  </div>
+  <div class="cols2">
+    <div><h3 class="mini">Para onde vai o VGV</h3><div class="bars">${bars}
+      <div class="bar ${c.lucro >= 0 ? 'profit' : 'loss'}"><div class="lbl"><span><b>Lucro</b></span><span class="num">${fR(c.lucro)} · ${fP(c.margem)}</span></div><div class="track"><div class="fill" style="width:${Math.max(0, Math.abs(c.lucro) / maxV * 100)}%"></div></div></div>
+    </div></div>
+    <div><h3 class="mini">Sensibilidade da margem</h3><div class="tw">${sens}</div>
+      <div class="legend"><span><i style="background:var(--good-soft);border:1px solid var(--good)"></i>≥ 20%</span><span><i style="background:var(--warn-soft);border:1px solid var(--warn)"></i>10 a 20%</span><span><i style="background:var(--bad-soft);border:1px solid var(--bad)"></i>&lt; 10%</span><span>Contorno = cenário atual</span></div>
+    </div>
+  </div>
+  <div class="alerts">${al.length ? al.map(a => `<div class="alert">${esc(a)}</div>`).join('') : `<div class="alert ok">Todos os dados principais estão preenchidos.</div>`}</div>`;
+}
+
+function updateOutputs() {
+  const s = S.cur, c = calc(s);
+  $('#sumbar').innerHTML = sumbarHTML(c);
+  const set = (k, v) => document.querySelectorAll(`[data-out="${k}"]`).forEach(el => el.textContent = v);
+  set('areaPriv', fN(c.areaPriv) + ' m²'); set('areaPriv2', fN(c.areaPriv)); set('eficiencia', fP(c.eficiencia));
+  set('custoM2Obra', fR(c.custoM2Obra, 2)); set('areaC', fN(s.areaConstruida) + ' m²'); set('obra', fR(c.obra));
+  set('outorga', fR(c.outorga)); set('vgvM2', fR(c.vgvM2, 2)); set('vgv2', fR(c.vgv));
+  set('nUn', `${c.nUn} unidades`); set('nPerm', `${c.nPerm} em permuta`);
+  document.querySelectorAll('[data-uv]').forEach(el => el.textContent = fR(c.uv[+el.dataset.uv]));
+  document.querySelectorAll('[data-ua]').forEach(el => { const u = s.unidades[+el.dataset.ua]; if (u) el.textContent = fN(precoAdotado(s, u), 2); });
+  set('vgvM2b', fR(c.vgvM2, 2));
+  document.querySelectorAll('[data-ov]').forEach(el => el.textContent = fR(c.ov[+el.dataset.ov]));
+  document.querySelectorAll('[data-cv]').forEach(el => el.textContent = fR(c.cv[+el.dataset.cv]));
+  const groups = groupsOf(s);
+  document.querySelectorAll('[data-gv]').forEach(el => { const idx = groups.get(el.dataset.gv) || []; el.textContent = fR(idx.reduce((a, i) => a + c.uv[i], 0)); });
+  document.querySelectorAll('[data-pm-ph]').forEach(() => {});
+  document.querySelectorAll('input[data-bind$=".pm"]').forEach(el => el.placeholder = fN(s.precoBase, 2));
+  $('#results').innerHTML = resultsHTML(s, c);
+  document.querySelectorAll('[data-qv]').forEach(el => { const q = (s.quadroAreas || [])[+el.dataset.qv]; el.textContent = fN(q ? num(q.qtd) * num(q.area) : 0) + ' m²'; });
+  set('qtot', fN(quadroTotal(s)) + ' m²');
+  const qw = $('#qwarn'); if (qw) qw.innerHTML = quadroWarn(s);
+}
+
+/* ============ eventos ============ */
+function applyBind(el) {
+  const [scope, a, b] = el.dataset.bind.split('.');
+  const t = el.dataset.t;
+  let v = t === 'bool' ? el.checked : t === 'num' ? (el.value.trim() === '' ? (b === 'pm' || scope === 'd' ? null : 0) : parseBR(el.value)) : el.value;
+  if (scope === 's') S.cur[a] = v;
+  else { const arr = ARR[scope]; if (S.cur[arr]?.[+a]) S.cur[arr][+a][b] = v; }
+}
+document.addEventListener('input', e => {
+  const el = e.target; if (!S.cur || !el.dataset?.bind || !$('#study')?.contains(el) && !el.closest('.sumbar')) return;
+  if (el.dataset.t === 'sel' || el.dataset.t === 'bool') return;
+  snap(el.dataset.bind); applyBind(el);
+  if (el.dataset.bind.endsWith('.pav')) { scheduleSave(); return; } // regroup on blur
+  updateOutputs(); scheduleSave();
+});
+document.addEventListener('change', e => {
+  const el = e.target; if (!S.cur) return;
+  if (el.dataset?.pavsel !== undefined) {
+    const i = +el.dataset.pavsel;
+    if (el.value === '__new__') { S.newPavFor = i; renderStudy(true); setTimeout(() => document.getElementById(`u.${i}.pav`)?.focus(), 20); return; }
+    snap(null); S.cur.unidades[i].pav = el.value; renderStudy(true); scheduleSave(); return;
+  }
+  if (el.id === 'adPav') {
+    const isNew = el.value === '__new__'; $('#adNewWrap').hidden = !isNew;
+    $('#adNome').value = isNew ? $('#adNome').value : nextUnitName(S.cur, groupsOf(S.cur).get(el.value) || []);
+    if (isNew) $('#adNew').focus();
+    return;
+  }
+  if (el.dataset?.t === 'sel' || el.dataset?.t === 'bool') { snap(null); applyBind(el); renderStudy(true); scheduleSave(); return; }
+  if (el.dataset?.grp !== undefined && el.dataset.grp !== '') {
+    snap(null); const v = parseBR(el.value); S.cur.unidades.forEach(u => { if (pavKey(u) === el.dataset.grp) u.fpav = v; });
+    renderStudy(true); scheduleSave(); return;
+  }
+  if (el.dataset?.bind?.endsWith('.pav')) { S.newPavFor = null; renderStudy(true); }
+});
+document.addEventListener('focusin', e => {
+  const el = e.target;
+  if (el.matches?.('input[data-t="num"],input[data-grp]') && el.value) { const v = parseBR(el.value); el.value = String(v).replace('.', ','); el.select?.(); }
+});
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (el.matches?.('input[data-t="num"]')) { if (el.value.trim() !== '') el.value = fN(parseBR(el.value), +el.dataset.d); }
+  if (el.matches?.('input[data-grp]')) el.value = fN(parseBR(el.value), 2);
+  if (el.dataset?.newpav && !el.value.trim()) { setTimeout(() => { if (S.newPavFor !== null && S.newPavFor !== undefined && document.activeElement !== el) { S.newPavFor = null; renderStudy(true); } }, 150); }
+  setTimeout(() => {
+    if (S.pendingRemote && !isEditing() && !S.saving && !S.dirty) { S.cur = S.pendingRemote; S.pendingRemote = null; resetHist(); renderStudy(true); toast('Estudo atualizado por outra pessoa.'); }
+  }, 900);
+});
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (!S.cur) return;
+  const s = S.cur;
+  if (t.id === 'pdfBtn') return exportPDF();
+  if (t.id === 'xlsBtn') return exportXLSX();
+  if (t.id === 'closeDrawer') { S.panel = null; S.confirmV = null; renderDrawer(); return; }
+  if (t.id === 'versBtn') { S.panel = S.panel === 'versions' ? null : 'versions'; S.confirmV = null; renderDrawer(); return; }
+  if (t.dataset.vpdf) { const v = S.versions.find(x => x.id === t.dataset.vpdf); if (v) exportPDF(v.dados); return; }
+  if (!S.canWrite) return;
+  if (t.id === 'undoBtn') { undo(); return; }
+  if (t.id === 'redoBtn') { redo(); return; }
+  if (t.id === 'saveVerBtn') { S.panel = S.panel === 'save' ? null : 'save'; renderDrawer(); return; }
+  if (t.id === 'verGo') {
+    const nome = ($('#verName')?.value || '').trim() || ((s.revisao || 'R00') + ' · ' + stamp());
+    const alsoPub = $('#verPub')?.checked;
+    t.disabled = true;
+    (async () => {
+      try { await flushSave(); await addVersion(nome, S.cur); toast(`Versão "${nome}" salva.`); S.panel = null; renderDrawer(); }
+      catch (err) { t.disabled = false; toast(err?.code === 'quota_exceeded' ? 'Limite de armazenamento atingido. Exclua versões antigas.' : 'Não foi possível salvar a versão.'); }
+    })();
+    return;
+  }
+  if (t.dataset.vrest) {
+    const v = S.versions.find(x => x.id === t.dataset.vrest); if (!v) return;
+    if (S.confirmV !== v.id) { S.confirmV = v.id; renderDrawer(); return; }
+    S.confirmV = null;
+    (async () => {
+      try { await flushSave(); await addVersion('Antes de restaurar · ' + stamp(), S.cur); } catch (err) {}
+      snap(null); S.cur = clone(v.dados); S.panel = null; renderStudy(true); scheduleSave(); toast(`Estudo voltou para "${v.nome}". Ctrl+Z desfaz.`);
+    })();
+    return;
+  }
+  if (t.dataset.vdel) {
+    const id = t.dataset.vdel;
+    if (S.confirmV !== 'del:' + id) { S.confirmV = 'del:' + id; renderDrawer(); return; }
+    S.confirmV = null; sb.from('estudo_versoes').delete().eq('id', id).then(({error}) => { if (error) toast('Não foi possível excluir a versão.'); loadVersions(); });
+    return;
+  }
+  if (t.id === 'useQuadro') { snap(null); s.areaConstruida = Math.round(quadroTotal(s) * 100) / 100; renderStudy(true); scheduleSave(); toast('Área total construída atualizada.'); return; }
+  if (t.id === 'fillUrb') { snap(null); if (!Array.isArray(s.dadosUrb)) s.dadosUrb = []; fillUrbanos(s); renderStudy(true); scheduleSave(); toast('Dados urbanísticos preenchidos. Ctrl+Z desfaz.'); return; }
+  if (t.id === 'adGo') {
+    const sel = $('#adPav').value, pav = sel === '__new__' ? $('#adNew').value.trim() : sel;
+    if (!pav) { toast('Dê um nome ao novo pavimento.'); $('#adNew')?.focus(); return; }
+    const nome = $('#adNome').value.trim() || 'Nova unidade';
+    const idx = groupsOf(s).get(pav) || []; const ref = idx.length ? s.unidades[idx[0]] : null;
+    snap(null);
+    s.unidades.push({id:rid(), nome, pav, area: parseBR($('#adArea').value), fpos:1, fpav: ref?.fpav || 1, pm:null, tipo: $('#adTipo').value});
+    S.tool = null; renderStudy(true); scheduleSave(); toast(`${nome} adicionada em ${pav}.`); return;
+  }
+  if (t.dataset.addpav !== undefined) {
+    const pav = t.dataset.addpav; const idx = groupsOf(s).get(pav) || [];
+    const ref = idx.length ? s.unidades[idx[idx.length - 1]] : null;
+    snap(null);
+    const nu = {id:rid(), nome:nextUnitName(s, idx), pav: pav === 'Sem pavimento' ? '' : pav, area:0, fpos:1, fpav:ref?.fpav || 1, pm:null, tipo:'venda'};
+    s.unidades.push(nu); renderStudy(true); scheduleSave();
+    const pos = s.unidades.length - 1; setTimeout(() => { const el = document.getElementById(`u.${pos}.area`); el?.focus(); el?.scrollIntoView({block:'center'}); }, 30);
+    toast(`${nu.nome} adicionada em ${pav}. Preencha a área.`);
+    return;
+  }
+  if (t.dataset.add || t.dataset.del || t.id === 'dupGo') snap(null);
+  if (t.dataset.add) {
+    const k = t.dataset.add;
+    if (k === 'u') { s.unidades.push({id:rid(), nome:'Nova unidade', pav:'Novo pavimento', area:0, fpos:1, fpav:1, pm:null, tipo:'venda'}); toast('Unidade criada em "Novo pavimento". Para pôr num andar que já existe, use o botão "+ Unidade" na linha do andar.'); }
+    if (k === 'o') s.outorgas.push({id:rid(), desc:`Outorga ${String(s.outorgas.length + 1).padStart(2, '0')}`, area:0, pct:0});
+    if (k === 'c') s.custos.push({id:rid(), desc:'Novo custo', modo:'fixo', valor:0});
+    if (k === 'q') { if (!Array.isArray(s.quadroAreas)) s.quadroAreas = []; s.quadroAreas.push({id:rid(), desc:'Novo pavimento', obs:'', qtd:1, area:0}); }
+    if (k === 'd') { if (!Array.isArray(s.dadosUrb)) s.dadosUrb = []; s.dadosUrb.push({id:rid(), desc:'Novo item', pct:null, valor:''}); }
+    renderStudy(true); scheduleSave(); return;
+  }
+  if (t.dataset.del) { const [sc, i] = t.dataset.del.split('.'); s[ARR[sc]].splice(+i, 1); renderStudy(true); scheduleSave(); return; }
+  if (t.dataset.tool !== undefined) { S.tool = t.dataset.tool || null; renderStudy(true); if (S.tool) $('#dupName')?.focus(); return; }
+  if (t.id === 'dupGo') {
+    const src = $('#dupSrc').value, name = $('#dupName').value.trim(), from = $('#dupFrom').value.trim(), to = $('#dupTo').value.trim();
+    if (!name) { toast('Dê um nome ao novo pavimento.'); return; }
+    const copies = s.unidades.filter(u => pavKey(u) === src).map(u => ({...clone(u), id:rid(), pav:name, nome: from && to ? u.nome.replace(new RegExp('(\\D*)' + from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '$1' + to) : u.nome}));
+    s.unidades.push(...copies); S.tool = null; renderStudy(true); scheduleSave(); toast(`${copies.length} unidades copiadas para ${name}.`); return;
+  }
+  if (t.id === 'dupStudy') { const d = clone(s); delete d._client; d.revisao = bumpRev(s.revisao); d.data = new Date().toISOString().slice(0, 10); createStudy(d); toast(`Revisão ${d.revisao} criada.`); return; }
+  if (t.id === 'delStudy') { if (!S.confirmDel) { S.confirmDel = true; renderStudy(true); setTimeout(() => { if (S.confirmDel) { S.confirmDel = false; if (S.cur) renderStudy(true); } }, 5000); return; } deleteStudy(S.curId); return; }
+});
+
+/* ============ exportação ============ */
+async function offerFile(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+const fileBase = s => (s.nome || 'estudo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) + '_' + (s.revisao || 'R00');
+const pdfT = str => String(str).replace(/[  ]/g, ' ').replace(/²/g, '2').replace(/[↓→←]/g, '').replace(/[–—]/g, '-');
+
+function exportPDF(sArg) {
+  if (!window.jspdf) { toast('O gerador de PDF não carregou. Recarregue a página.'); return; }
+  const s = sArg || S.cur, c = calc(s);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const W = 210, M = 14, CW = W - 2 * M;
+  const ACC = [30, 94, 104], INK = [20, 38, 43], MUT = [90, 107, 111], LINE = [211, 219, 218], SOFT = [224, 236, 236], SAND = [169, 120, 58], SANDS = [244, 235, 221];
+  const T = pdfT;
+  const tbl = (opt) => doc.autoTable(Object.assign({
+    theme:'grid', margin:{left:M, right:M, top:22, bottom:18},
+    styles:{font:'helvetica', fontSize:8.2, cellPadding:1.8, textColor:INK, lineColor:LINE, lineWidth:0.15},
+    headStyles:{fillColor:ACC, textColor:255, fontStyle:'bold', fontSize:7.6},
+    footStyles:{fillColor:SOFT, textColor:INK, fontStyle:'bold'},
+  }, opt));
+  const title = (txt, y) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...ACC); doc.text(T(txt).toUpperCase(), M, y); doc.setDrawColor(...ACC); doc.setLineWidth(0.4); doc.line(M, y + 1.6, M + CW, y + 1.6); return y + 6; };
+  const ensure = (y, need) => { if (y + need > 280) { doc.addPage(); return 26; } return y; };
+
+  // capa / cabeçalho
+  doc.setFillColor(...ACC); doc.rect(0, 0, W, 40, 'F');
+  doc.setTextColor(255); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  doc.text('ESTUDO DE VIABILIDADE FINANCEIRA', M, 12);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19);
+  doc.text(doc.splitTextToSize(T(s.nome || 'Estudo'), CW - 40)[0], M, 22);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  doc.text(T([s.endereco, s.local].filter(Boolean).join(' - ')), M, 29);
+  doc.setFontSize(8.5); doc.text(T([s.descricao, s.cliente ? 'Cliente: ' + s.cliente : ''].filter(Boolean).join('   |   ')), M, 35);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text(T(s.revisao || 'R00'), W - M, 22, {align:'right'});
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(fDate(s.data), W - M, 29, {align:'right'});
+
+  // KPIs
+  let y = 50;
+  const kp = [
+    ['VGV', fR(c.vgv), `${c.nUn} unidades`],
+    ['CUSTO TOTAL', fR(c.total), `${fR(c.custoM2, 2)}/m² construído`],
+    ['LUCRO ESTIMADO', fR(c.lucro), `margem ${fP(c.margem)} s/ VGV`],
+    ['LUCRO ÷ OBRA', fP(c.sobreObra), `lucro ÷ custo total ${fP(c.sobreCusto)}`],
+  ];
+  const bw = (CW - 9) / 4;
+  kp.forEach((k, i) => {
+    const x = M + i * (bw + 3), hero = i === 2;
+    if (hero) { doc.setFillColor(...ACC); doc.rect(x, y, bw, 22, 'F'); } else { doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(x, y, bw, 22); }
+    doc.setTextColor(...(hero ? [255, 255, 255] : MUT)); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); doc.text(T(k[0]), x + 3, y + 5.5);
+    doc.setTextColor(...(hero ? [255, 255, 255] : INK)); doc.setFontSize(11.5); doc.text(T(k[1]), x + 3, y + 12.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...(hero ? [225, 240, 240] : MUT)); doc.text(T(k[2]), x + 3, y + 18);
+  });
+  y += 32;
+
+  // composição
+  y = title('Composição de custos e resultado', y);
+  const maxV = Math.max(c.vgv, 1);
+  const rows = c.items.map(x => [T(x.label), T(x.base), T(fR(x.v)), T(fP(c.vgv ? x.v / c.vgv : 0)), '']);
+  tbl({ startY:y, head:[['Item', 'Base de cálculo', 'Valor', '% VGV', '']],
+    body:rows,
+    foot:[['Custo total', '', T(fR(c.total)), T(fP(c.vgv ? c.total / c.vgv : 0)), ''], ['VGV', '', T(fR(c.vgv)), '100,0%', ''], ['Lucro estimado', '', T(fR(c.lucro)), T(fP(c.margem)), '']],
+    columnStyles:{0:{cellWidth:58}, 1:{cellWidth:50, textColor:MUT}, 2:{halign:'right', cellWidth:30}, 3:{halign:'right', cellWidth:16}, 4:{cellWidth:'auto'}},
+    didDrawCell: d => {
+      if (d.section === 'body' && d.column.index === 4) {
+        const it = c.items[d.row.index]; const w = (d.cell.width - 3) * Math.max(0, it.v) / maxV;
+        doc.setFillColor(...(it.k === 'permuta' ? SAND : ACC)); doc.rect(d.cell.x + 1.5, d.cell.y + d.cell.height / 2 - 1.3, w, 2.6, 'F');
+      }
+      if (d.section === 'foot' && d.column.index === 4 && d.row.index === 2) {
+        const w = (d.cell.width - 3) * Math.max(0, c.lucro) / maxV; doc.setFillColor(44, 122, 75); doc.rect(d.cell.x + 1.5, d.cell.y + d.cell.height / 2 - 1.3, w, 2.6, 'F');
+      }
+    }});
+  y = doc.lastAutoTable.finalY + 9;
+
+  // indicadores + dados
+  y = ensure(y, 70);
+  y = title('Indicadores e dados do empreendimento', y);
+  const ind = [
+    ['Área total construída', `${fN(s.areaConstruida)} m²`, 'Área do terreno', s.terreno ? `${fN(s.terreno)} m²` : '-'],
+    ['Área privativa (unidades)', `${fN(c.areaPriv)} m²`, 'Taxa de ocupação', s.to ? `${fN(s.to)}%` : '-'],
+    ['Eficiência (priv. ÷ constr.)', fP(c.eficiencia), 'Coef. de aproveitamento', s.ca ? fN(s.ca) : '-'],
+    ['Área de lazer', s.areaLazer ? `${fN(s.areaLazer)} m²` : '-', 'Taxa de permeabilidade', s.permeab ? `${fN(s.permeab)}%` : '-'],
+    ['CUB/SC' + (s.cubRef ? ` (${s.cubRef})` : ''), fR(s.cub, 2) + '/m²', 'Vagas de garagem', s.vagas ? fN(s.vagas, 0) : '-'],
+    ['Fator sobre CUB / custo obra m²', `${fN(s.fatorCub)} × = ${fR(c.custoM2Obra, 2)}`, 'Pavimentos', s.pavimentos ? fN(s.pavimentos, 0) : '-'],
+    ['Preço base de venda', fR(s.precoBase, 2) + '/m²', 'VGV por m² privativo', fR(c.vgvM2, 2)],
+    ['Corretagem / impostos', `${fN(s.comissao, 1)}% / ${fN(s.imposto, 1)}% das vendas`, 'Ticket médio por unidade', fR(c.ticket)],
+    ['Unidades em permuta', `${c.nPerm} de ${c.nUn} (${fR(c.permuta)})`, 'Unidades à venda', `${c.nUn - c.nPerm} (${fR(c.venda)})`],
+  ].map(r => r.map(T));
+  tbl({ startY:y, body:ind, theme:'plain', styles:{font:'helvetica', fontSize:8.2, cellPadding:1.6, textColor:INK},
+    columnStyles:{0:{textColor:MUT, cellWidth:48}, 1:{fontStyle:'bold', cellWidth:43}, 2:{textColor:MUT, cellWidth:48}, 3:{fontStyle:'bold'}},
+    didParseCell: d => { if (d.row.index % 2 === 0) d.cell.styles.fillColor = [246, 249, 248]; } });
+  y = doc.lastAutoTable.finalY + 9;
+
+  // quadro de áreas + dados urbanísticos
+  const QA = (s.quadroAreas || []).filter(q => q.desc || num(q.area));
+  const DU = (s.dadosUrb || []).filter(d => d.desc || d.valor);
+  if (QA.length) {
+    y = ensure(y, 40); y = title('Quadro de áreas', y);
+    tbl({ startY:y, head:[['Pavimento', 'Observação', 'Repetições', 'Área (m2)', 'Total (m2)']],
+      body:QA.map(q => [T(q.desc || ''), T(q.obs || ''), num(q.qtd) === 1 ? '1' : fN(q.qtd, 0) + 'x', fN(q.area), fN(num(q.qtd) * num(q.area))]),
+      foot:[['TOTAL', '', '', '', T(fN(quadroTotal(s)))]],
+      columnStyles:{2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right', fontStyle:'bold'}} });
+    y = doc.lastAutoTable.finalY + 7;
+  }
+  if (DU.length) {
+    y = ensure(y, 30); y = title('Dados urbanísticos', y);
+    tbl({ startY:y, head:[['Item', '%', 'Valor']],
+      body:DU.map(d => [T(d.desc || ''), d.pct === null || d.pct === undefined || d.pct === '' ? '' : fN(d.pct) + '%', T(d.valor || '-')]),
+      columnStyles:{1:{halign:'right', cellWidth:24}, 2:{halign:'right', cellWidth:48, fontStyle:'bold'}} });
+    y = doc.lastAutoTable.finalY + 9;
+  }
+
+  // outorgas
+  if ((s.outorgas || []).length) {
+    y = ensure(y, 30); y = title('Outorgas', y);
+    tbl({ startY:y, head:[['Descrição', 'Área (m2)', '% do CUB', 'CUB (R$/m2)', 'Valor']],
+      body:s.outorgas.map((o, i) => [T(o.desc), fN(o.area), fN(o.pct) + '%', T(fR(s.cub, 2)), T(fR(c.ov[i]))]),
+      foot:[['Total', '', '', '', T(fR(c.outorga))]], columnStyles:{1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right'}} });
+    y = doc.lastAutoTable.finalY + 9;
+  }
+
+  // sensibilidade
+  y = ensure(y, 55); y = title('Sensibilidade da margem sobre o VGV', y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(...MUT);
+  doc.text('Linhas: variação do preço de venda. Colunas: variação do custo de obra. Contorno: cenário atual.', M, y); y += 3;
+  tbl({ startY:y, head:[['Preço / Obra', ...D_OBRA.map(d => (d > 0 ? '+' : '') + Math.round(d * 100) + '%')]],
+    body:D_PRECO.map(dp => [(dp > 0 ? '+' : '') + Math.round(dp * 100) + '%', ...D_OBRA.map(dO => { const r = calc(s, {dPreco:dp, dObra:dO}); return T(fP(r.margem) + '  (' + fM(r.lucro) + ')'); })]),
+    styles:{font:'helvetica', fontSize:8, halign:'center', cellPadding:1.8, lineColor:LINE, lineWidth:0.15, textColor:INK},
+    columnStyles:{0:{fontStyle:'bold', fillColor:[238, 242, 241]}},
+    didParseCell: d => {
+      if (d.section !== 'body' || d.column.index === 0) return;
+      const r = calc(s, {dPreco:D_PRECO[d.row.index], dObra:D_OBRA[d.column.index - 1]});
+      d.cell.styles.fillColor = r.margem >= 0.2 ? [226, 241, 231] : r.margem >= 0.1 ? [251, 239, 217] : [248, 227, 222];
+      if (D_PRECO[d.row.index] === 0 && D_OBRA[d.column.index - 1] === 0) d.cell.styles.fontStyle = 'bold';
+    },
+    didDrawCell: d => { if (d.section === 'body' && d.column.index > 0 && D_PRECO[d.row.index] === 0 && D_OBRA[d.column.index - 1] === 0) { doc.setDrawColor(...INK); doc.setLineWidth(0.6); doc.rect(d.cell.x + 0.3, d.cell.y + 0.3, d.cell.width - 0.6, d.cell.height - 0.6); } } });
+
+  // unidades
+  doc.addPage(); y = 26; y = title('Relação de unidades privativas', y);
+  const groups = groupsOf(s); const body = [];
+  for (const [pav, idx] of groups) {
+    const ar = idx.reduce((a, i) => a + num(s.unidades[i].area), 0), vv = idx.reduce((a, i) => a + c.uv[i], 0);
+    body.push([{content:T(`${pav}  -  ${idx.length} un.  -  ${fN(ar)} m²`), colSpan:6, styles:{fillColor:SOFT, fontStyle:'bold'}}, {content:T(fR(vv)), styles:{fillColor:SOFT, fontStyle:'bold', halign:'right'}}, {content:'', styles:{fillColor:SOFT}}]);
+    idx.forEach(i => { const u = s.unidades[i]; body.push({perm:u.tipo === 'permuta', cells:[T(u.nome), fN(u.area), fN(u.fpos), fN(u.fpav), T(fR(unitPrice(s, u), 2)), T(fR(num(u.area) ? c.uv[i] / num(u.area) : 0, 2)), T(fR(c.uv[i])), u.tipo === 'permuta' ? 'Permuta' : 'Venda']}); });
+  }
+  const permRows = new Set(); const bodyRows = body.map((r, k) => { if (r.cells) { if (r.perm) permRows.add(k); return r.cells; } return r; });
+  tbl({ startY:y, head:[['Unidade', 'Área m2', 'F. posição', 'F. pav.', 'R$/m2 base', 'R$/m2 adotado', 'Valor', 'Tipo']], body:bodyRows,
+    showFoot:'lastPage',
+    foot:[[`${c.nUn} unidades`, fN(c.areaPriv), '', '', '', T(fR(c.vgvM2, 2)), T(fR(c.vgv)), `${c.nPerm} perm.`]],
+    styles:{font:'helvetica', fontSize:7.6, cellPadding:1.3, textColor:INK, lineColor:LINE, lineWidth:0.12},
+    columnStyles:{1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right'}, 5:{halign:'right'}, 6:{halign:'right', fontStyle:'bold'}, 7:{halign:'center'}},
+    didParseCell: d => { if (d.section === 'body' && permRows.has(d.row.index)) { d.cell.styles.fillColor = SANDS; if (d.column.index === 7) { d.cell.styles.textColor = SAND; d.cell.styles.fontStyle = 'bold'; } } } });
+  y = doc.lastAutoTable.finalY + 9;
+
+  // observações
+  y = ensure(y, 40); y = title('Observações e premissas', y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...INK);
+  const notes = [
+    ...(s.notas ? String(s.notas).split('\n') : []),
+    '',
+    'Valor da unidade = área privativa × preço/m² × fator de posição × fator de pavimento.',
+    'Custo de obra = área total construída × CUB × fator sobre o CUB. Outorga = área × CUB × percentual.',
+    'Unidades de permuta compõem o VGV e entram como custo do terreno; não incidem corretagem nem impostos sobre elas.',
+    'Estudo preliminar de caráter estimativo. Não substitui orçamento executivo, pesquisa de mercado ou análise tributária.',
+  ];
+  for (const line of notes) { const parts = doc.splitTextToSize(T(line), CW); for (const p of parts) { y = ensure(y, 6); doc.text(p, M, y); y += 4.4; } if (!line) y += 1; }
+
+  // cabeçalho e rodapé das páginas
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    if (i > 1) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...ACC); doc.text(T(s.nome || ''), M, 13);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUT); doc.text(T(`Estudo de viabilidade financeira  |  ${s.revisao || 'R00'}  |  ${fDate(s.data)}`), W - M, 13, {align:'right'});
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, 16, W - M, 16);
+    }
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.line(M, 284, W - M, 284);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MUT);
+    doc.text(T([s.empresa, s.responsavel ? 'Resp.: ' + s.responsavel : ''].filter(Boolean).join('  |  ')), M, 289);
+    doc.text(`Página ${i} de ${n}`, W - M, 289, {align:'right'});
+  }
+  offerFile(fileBase(s) + '.pdf', doc.output('blob'));
+}
+
+function exportXLSX() {
+  if (!window.XLSX) { toast('O gerador de Excel não carregou. Recarregue a página.'); return; }
+  const s = S.cur, c = calc(s);
+  const wb = XLSX.utils.book_new();
+  const resumo = [
+    ['ESTUDO DE VIABILIDADE FINANCEIRA'], [],
+    ['Empreendimento', s.nome], ['Cliente', s.cliente], ['Endereço', s.endereco], ['Uso', s.descricao], ['Local', s.local],
+    ['Data', fDate(s.data)], ['Revisão', s.revisao], ['Responsável', s.responsavel], ['Empresa', s.empresa], [],
+    ['Área total construída (m²)', num(s.areaConstruida)], ['Área privativa (m²)', c.areaPriv], ['Área de lazer (m²)', num(s.areaLazer)],
+    ['CUB/SC (R$/m²)', num(s.cub)], ['Fator sobre CUB', num(s.fatorCub)], ['Preço base (R$/m²)', num(s.precoBase)],
+    ['Corretagem (%)', num(s.comissao)], ['Impostos (%)', num(s.imposto)], [],
+    ['CUSTOS', 'Base', 'Valor (R$)', '% VGV'],
+    ...c.items.map(x => [x.label, x.base, Math.round(x.v * 100) / 100, c.vgv ? x.v / c.vgv : 0]),
+    ['Custo total', '', c.total, c.vgv ? c.total / c.vgv : 0], ['VGV', '', c.vgv, 1], ['Lucro estimado', '', c.lucro, c.margem], [],
+    ['Lucro ÷ custo de obra', c.sobreObra], ['Lucro ÷ custo total', c.sobreCusto],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(resumo); ws1['!cols'] = [{wch:32}, {wch:34}, {wch:18}, {wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+  const un = [['Unidade', 'Pavimento', 'Área m²', 'Fator posição', 'Fator pav.', 'R$/m² base', 'R$/m² adotado', 'Valor (R$)', 'Tipo'],
+    ...[...groupsOf(s).values()].flat().map(i => { const u = s.unidades[i]; return [u.nome, u.pav, num(u.area), num(u.fpos), num(u.fpav), unitPrice(s, u), Math.round(precoAdotado(s, u) * 100) / 100, Math.round(c.uv[i] * 100) / 100, u.tipo === 'permuta' ? 'Permuta' : 'Venda']; })];
+  const ws2 = XLSX.utils.aoa_to_sheet(un); ws2['!cols'] = [{wch:14}, {wch:24}, {wch:10}, {wch:12}, {wch:10}, {wch:12}, {wch:14}, {wch:16}, {wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Unidades');
+  const qa = [['QUADRO DE ÁREAS'], ['Pavimento', 'Observação', 'Repetições', 'Área (m²)', 'Total (m²)'],
+    ...(s.quadroAreas || []).map(q => [q.desc, q.obs, num(q.qtd), num(q.area), num(q.qtd) * num(q.area)]),
+    ['TOTAL', '', '', '', quadroTotal(s)], [], ['DADOS URBANÍSTICOS'], ['Item', '%', 'Valor'],
+    ...(s.dadosUrb || []).map(d => [d.desc, d.pct === null || d.pct === undefined ? '' : num(d.pct) / 100, d.valor])];
+  const ws3 = XLSX.utils.aoa_to_sheet(qa); ws3['!cols'] = [{wch:34}, {wch:24}, {wch:12}, {wch:12}, {wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Áreas');
+  const out = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+  offerFile(fileBase(s) + '.xlsx', new Blob([out]));
+}
+
+/* ============ entrada (login) ============ */
+const L = { step:'email', email:'', msg:'', err:'' };
+function renderLogin() {
+  S.mode = 'login'; renderTopUser(); setStatus('off', 'Não conectado');
+  const m = L.msg ? `<div class="alert ok">${esc(L.msg)}</div>` : '', e = L.err ? `<div class="alert">${esc(L.err)}</div>` : '';
+  let body = '';
+  if (L.step === 'email') body = `<form id="fEmail" class="lform">
+      <div class="f"><label for="lEmail">Seu e-mail</label><div class="inp"><input id="lEmail" type="email" autocomplete="email" required value="${esc(L.email)}" placeholder="nome@empresa.com.br"></div></div>
+      <button class="btn pri" type="submit">Continuar</button></form>`;
+  else if (L.step === 'senha') body = `<form id="fLogin" class="lform">
+      <div class="lmail">${esc(L.email)} <button type="button" class="btn sm ghost" id="lBack">trocar</button></div>
+      <div class="f"><label for="lPass">Senha</label><div class="inp"><input id="lPass" type="password" autocomplete="current-password" required></div></div>
+      <button class="btn pri" type="submit">Entrar</button>
+      <div class="llinks"><button type="button" class="btn sm ghost" id="lFirst">Primeiro acesso? Criar minha senha</button><button type="button" class="btn sm ghost" id="lForgot">Esqueci minha senha</button></div></form>`;
+  else if (L.step === 'criar') body = `<form id="fSignup" class="lform">
+      <div class="lmail">${esc(L.email)} <button type="button" class="btn sm ghost" id="lBack">trocar</button></div>
+      <div class="f"><label for="lP1">Crie uma senha (mínimo 8 caracteres)</label><div class="inp"><input id="lP1" type="password" autocomplete="new-password" minlength="8" required></div></div>
+      <div class="f"><label for="lP2">Repita a senha</label><div class="inp"><input id="lP2" type="password" autocomplete="new-password" minlength="8" required></div></div>
+      <button class="btn pri" type="submit">Criar senha e entrar</button>
+      <div class="llinks"><button type="button" class="btn sm ghost" id="lHave">Já tenho senha</button></div></form>`;
+  else if (L.step === 'nova') body = `<form id="fNew" class="lform">
+      <div class="f"><label for="lN1">Nova senha (mínimo 8 caracteres)</label><div class="inp"><input id="lN1" type="password" autocomplete="new-password" minlength="8" required></div></div>
+      <div class="f"><label for="lN2">Repita a nova senha</label><div class="inp"><input id="lN2" type="password" autocomplete="new-password" minlength="8" required></div></div>
+      <button class="btn pri" type="submit">Salvar nova senha</button></form>`;
+  $('#app').innerHTML = `<div class="wrap"><div class="login">
+    <div class="lhead"><div class="mark big">EVF</div><div><h1>EZE Viabilidade</h1><p>Estudos de viabilidade financeira</p></div></div>
+    ${m}${e}${body}
+    <p class="lfoot">O acesso é liberado pelo administrador. Se o seu e-mail não estiver liberado, peça acesso a ele.</p>
+  </div></div>`;
+  setTimeout(() => $('#lEmail,#lPass,#lP1,#lN1')?.focus(), 30);
+}
+document.addEventListener('submit', async e => {
+  const f = e.target; if (!f.classList?.contains('lform')) return;
+  e.preventDefault();
+  const btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+  L.msg = ''; L.err = '';
+  try {
+    if (f.id === 'fEmail') {
+      L.email = $('#lEmail').value.trim().toLowerCase();
+      const { data, error } = await sb.rpc('email_liberado', {p_email: L.email});
+      if (error) throw error;
+      if (!data) L.err = 'Este e-mail não tem acesso. Peça liberação ao administrador.'; else L.step = 'senha';
+    } else if (f.id === 'fLogin') {
+      const { error } = await sb.auth.signInWithPassword({email: L.email, password: $('#lPass').value});
+      if (error) { L.err = /invalid/i.test(error.message) ? 'Senha incorreta. Se for seu primeiro acesso, clique em "Primeiro acesso? Criar minha senha".' : error.message; }
+      else { await enterApp(); return; }
+    } else if (f.id === 'fSignup') {
+      const p1 = $('#lP1').value, p2 = $('#lP2').value;
+      if (p1 !== p2) L.err = 'As senhas não são iguais.';
+      else {
+        const { data, error } = await sb.auth.signUp({email: L.email, password: p1, options:{emailRedirectTo: location.origin}});
+        if (error) L.err = /registered|exists/i.test(error.message) ? 'Este e-mail já tem senha. Use "Já tenho senha" ou "Esqueci minha senha".' : /acesso/i.test(error.message) ? 'Este e-mail não tem acesso liberado.' : error.message;
+        else if (data.session) { await enterApp(); return; }
+        else { L.step = 'senha'; L.msg = 'Senha criada. Enviamos um e-mail de confirmação: clique no link e depois entre com a senha.'; }
+      }
+    } else if (f.id === 'fNew') {
+      const p1 = $('#lN1').value, p2 = $('#lN2').value;
+      if (p1 !== p2) L.err = 'As senhas não são iguais.';
+      else { const { error } = await sb.auth.updateUser({password: p1}); if (error) L.err = error.message; else { toast('Senha alterada.'); L.step = 'email'; history.replaceState(null, '', location.pathname + '#inicio'); await enterApp(); return; } }
+    }
+  } catch (err) { L.err = 'Não foi possível continuar: ' + (err?.message || 'erro de conexão'); }
+  renderLogin();
+});
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'lBack') { L.step = 'email'; L.err = L.msg = ''; renderLogin(); }
+  if (t.id === 'lFirst') { L.step = 'criar'; L.err = L.msg = ''; renderLogin(); }
+  if (t.id === 'lHave') { L.step = 'senha'; L.err = L.msg = ''; renderLogin(); }
+  if (t.id === 'lForgot') {
+    const { error } = await sb.auth.resetPasswordForEmail(L.email, {redirectTo: location.origin + location.pathname});
+    L.err = error ? error.message : ''; L.msg = error ? '' : `Enviamos um link para ${L.email}. Abra o e-mail e clique no link para criar uma nova senha.`; renderLogin();
+  }
+  if (t.id === 'logoutBtn') { await sb.auth.signOut(); S.email = S.role = null; L.step = 'email'; L.msg = L.err = ''; closeStudy(); location.hash = ''; renderLogin(); }
+});
+
+/* ============ acessos (admin) ============ */
+const A = { rows:[], confirm:null, err:'' };
+async function renderAcessos() {
+  if (S.role !== 'admin') { location.hash = 'inicio'; return; }
+  const { data, error } = await sb.rpc('acessos_status');
+  A.rows = data || []; A.err = error ? error.message : '';
+  drawAcessos();
+}
+const PAPEIS = {admin:'Admin (tudo + acessos)', editor:'Editor (cria e edita)', leitor:'Leitor (só vê e exporta)'};
+function drawAcessos() {
+  const rows = A.rows.map(r => `<tr>
+    <td>${esc(r.email)}${r.email === S.email ? ' <span class="tag pub">você</span>' : ''}</td>
+    <td style="width:220px">${r.email === S.email ? esc(PAPEIS[r.papel]) : `<select class="cell" data-papel="${esc(r.email)}">${Object.entries(PAPEIS).map(([k, v]) => `<option value="${k}" ${r.papel === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`}</td>
+    <td>${r.tem_conta ? '<span class="pill good">Já criou senha</span>' : '<span class="pill warn">Ainda não acessou</span>'}</td>
+    <td style="width:170px;text-align:right">${r.email === S.email ? '' : `<button class="btn sm ghost danger ${A.confirm === r.email ? 'confirm' : ''}" data-rmacc="${esc(r.email)}">${A.confirm === r.email ? 'Confirmar remoção' : 'Remover acesso'}</button>`}</td></tr>`).join('');
+  $('#app').innerHTML = `<div class="wrap">
+    <div class="listhead"><div><a class="btn sm ghost" href="#inicio">← Estudos</a><h1 style="margin-top:8px">Acessos</h1><p>Só os e-mails desta lista conseguem entrar. Depois de liberar, envie o link do sistema para a pessoa: no primeiro acesso ela cria a própria senha.</p></div></div>
+    ${A.err ? `<div class="alert">${esc(A.err)}</div>` : ''}
+    <section class="sec"><div class="body">
+      <form id="fAcc" class="accform">
+        <div class="f" style="flex:2;min-width:220px"><label for="aEmail">E-mail para liberar</label><div class="inp"><input id="aEmail" type="email" required placeholder="nome@empresa.com.br"></div></div>
+        <div class="f" style="flex:1;min-width:200px"><label for="aPapel">Tipo de acesso</label><div class="inp"><select id="aPapel">${Object.entries(PAPEIS).map(([k, v]) => `<option value="${k}" ${k === 'editor' ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
+        <button class="btn pri" type="submit">${ICON.plus}Liberar acesso</button>
+      </form>
+      <div class="tw" style="margin-top:16px"><table><thead><tr><th>E-mail</th><th>Acesso</th><th>Situação</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="padding:14px">Nenhum e-mail liberado.</td></tr>'}</tbody></table></div>
+      <div class="pubbox" style="margin-top:16px"><div><b>Link do sistema</b><p>${esc(location.origin + location.pathname)}</p></div><button class="btn sm" data-copy="${esc(location.origin + location.pathname)}">Copiar link</button></div>
+    </div></section></div>`;
+}
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'fAcc') return;
+  e.preventDefault();
+  const email = $('#aEmail').value.trim().toLowerCase(), papel = $('#aPapel').value;
+  const { error } = await sb.from('acessos').upsert({email, papel, criado_por: S.email});
+  if (error) toast('Não foi possível liberar: ' + error.message); else toast(`${email} liberado.`);
+  renderAcessos();
+});
+document.addEventListener('change', async e => {
+  const el = e.target; if (el.dataset?.papel === undefined) return;
+  const { error } = await sb.from('acessos').update({papel: el.value}).eq('email', el.dataset.papel);
+  toast(error ? 'Não foi possível alterar: ' + error.message : 'Acesso alterado.'); renderAcessos();
+});
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.rmacc) {
+    const em = t.dataset.rmacc;
+    if (A.confirm !== em) { A.confirm = em; drawAcessos(); setTimeout(() => { if (A.confirm === em) { A.confirm = null; if (location.hash === '#acessos') drawAcessos(); } }, 5000); return; }
+    A.confirm = null;
+    const { error } = await sb.from('acessos').delete().eq('email', em);
+    toast(error ? 'Não foi possível remover: ' + error.message : `Acesso de ${em} removido.`); renderAcessos();
+  }
+  if (t.dataset.copy) {
+    try { await navigator.clipboard.writeText(t.dataset.copy); toast('Link copiado.'); } catch (err) { toast(t.dataset.copy); }
+  }
+});
+
+/* ============ início ============ */
+async function enterApp() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (L.step === 'nova' && session) { renderLogin(); return; }
+  if (!session) { renderLogin(); return; }
+  S.email = (session.user.email || '').toLowerCase();
+  const { data: role } = await sb.rpc('meu_papel');
+  if (!role) {
+    S.mode = 'login'; renderTopUser();
+    $('#app').innerHTML = `<div class="wrap"><div class="login"><h1>Sem acesso</h1><p>O e-mail ${esc(S.email)} não está liberado (ou o acesso foi removido). Peça ao administrador.</p><button class="btn" id="logoutBtn">Sair</button></div></div>`;
+    return;
+  }
+  S.role = role; S.canWrite = role === 'admin' || role === 'editor'; S.mode = 'db';
+  setStatus('', S.canWrite ? 'Conectado' : 'Somente leitura'); renderTopUser();
+  clearInterval(S.listT); S.listT = setInterval(async () => { if (S.mode === 'db' && !S.curId && !document.hidden && (location.hash === '#inicio' || !location.hash)) { if (await loadList()) renderList(); } }, 20000);
+  const h = location.hash.slice(1);
+  if (!h || h.startsWith('access_token') || h.startsWith('error')) history.replaceState(null, '', location.pathname + '#inicio');
+  route();
+}
+async function boot() {
+  if (!sb) { $('#app').innerHTML = `<div class="wrap"><div class="empty" style="margin-top:30px"><h3>Não foi possível carregar</h3><p>Recarregue a página. Se continuar, confira a internet.</p></div></div>`; return; }
+  const h = location.hash.slice(1);
+  if (h === 'publico' || h.startsWith('publico-')) {
+    S.mode = 'public'; S.canWrite = false; renderTopUser(); setStatus('', 'Versão para consulta');
+    await loadList(); route(); return;
+  }
+  S.mode = 'connecting';
+  await enterApp();
+}
+window.addEventListener('hashchange', route);
+sb?.auth.onAuthStateChange((ev) => { if (ev === 'PASSWORD_RECOVERY') { L.step = 'nova'; L.err = L.msg = ''; renderLogin(); } });
+if (/type=recovery/.test(location.hash)) { L.step = 'nova'; }
+boot();
+
+</script>
+</body>
+</html>
