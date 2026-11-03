@@ -599,7 +599,7 @@ function renderStudy(keepScroll) {
       <section class="sec" id="s8"><header><span class="n">09</span><h2>Observações</h2><p>Premissas, fontes e ressalvas. Saem no final do PDF.</p></header><div class="body"><textarea id="notas" data-bind="s.notas" data-t="text" placeholder="Ex.: CUB/SC de outubro/2026, padrão R8-N. Preços de venda com base em pesquisa de mercado no bairro.">${esc(s.notas)}</textarea>
       <div class="toolrow" style="margin-top:16px;border-top:1px solid var(--line2);padding-top:14px">
         ${ro ? '' : `<button class="btn" id="dupStudy">${ICON.copy}Duplicar como nova revisão</button>
-        ${podeExcluir(s) ? `<button class="btn danger ${S.confirmDel ? 'confirm' : ''}" id="delStudy">${S.confirmDel ? 'Clique de novo para excluir' : 'Excluir estudo'}</button>` : `<span class="hint">Só quem criou o estudo ou o administrador pode excluí-lo.</span>`}`}
+        ${podeExcluir(s) ? `<button class="btn danger ${S.confirmDel ? 'confirm' : ''}" id="delStudy">${S.confirmDel ? 'Clique de novo para excluir' : 'Excluir estudo'}</button>` : ''}`}
       </div></div></section>
     </main>
   </div></div>
