@@ -114,3 +114,11 @@ create policy versoes_excluir on public.estudo_versoes for delete to authenticat
 insert into public.acessos (email, papel, criado_por)
 values ('maiko.gkengenharia@gmail.com', 'admin', 'instalação')
 on conflict (email) do update set papel = 'admin';
+
+-- funções internas não ficam abertas para quem não está logado
+revoke execute on function public.acessos_status() from public, anon;
+revoke execute on function public.meu_papel() from public, anon;
+grant execute on function public.acessos_status() to authenticated;
+grant execute on function public.meu_papel() to authenticated;
+grant execute on function public.email_liberado(text) to anon, authenticated;
+revoke execute on function public.bloquear_cadastro() from public, anon, authenticated;
