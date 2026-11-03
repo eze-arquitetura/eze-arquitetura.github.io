@@ -429,7 +429,7 @@ async function doSave() {
   S.saving = true;
   const id = S.curId, body = cleanBody(S.cur), myRev = S.rev;
   try {
-    const { data, error } = await sb.from('estudos').update({dados: body, nome: body.nome || '', publico: !!body.publico, rev: myRev + 1, atualizado_em: new Date().toISOString(), atualizado_por: S.email}).eq('id', id).eq('rev', myRev).select('rev');
+    const { data, error } = await sb.from('estudos').update({dados: body, nome: body.nome || '', publico: !!body.publico, rev: myRev + 1, atualizado_em: new Date().toISOString()}).eq('id', id).eq('rev', myRev).select('rev');
     if (error) throw error;
     if (!data || !data.length) { await handleConflict(id, body); }
     else { S.rev = data[0].rev; if (!S.again) S.dirty = false; setStatus('', 'Salvo às ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})); }
@@ -443,7 +443,7 @@ async function doSave() {
 async function handleConflict(id, mine) {
   const { data } = await sb.from('estudos').select('*').eq('id', id).maybeSingle();
   if (!data) { toast('Este estudo foi excluído por outra pessoa.'); location.hash = 'inicio'; return; }
-  try { await sb.from('estudo_versoes').insert({estudo_id:id, nome:'Minha edição (conflito) · ' + stamp(), dados:mine, criado_por:S.email}); } catch (e) {}
+  try { await sb.from('estudo_versoes').insert({estudo_id:id, nome:'Minha edição (conflito) · ' + stamp(), dados:mine}); } catch (e) {}
   S.cur = fromRow(data); S.rev = data.rev; S.dirty = false; resetHist(); renderStudy(true); loadVersions();
   toast(`${data.atualizado_por || 'Outra pessoa'} salvou antes de você. Carreguei a versão dela; a sua ficou guardada em Versões.`);
   setStatus('', 'Atualizado');
@@ -455,7 +455,7 @@ async function createStudy(data) {
   const id = 'e' + rid();
   data.criadoEm = data.atualizadoEm = Date.now();
   const body = cleanBody(data);
-  const { error } = await sb.from('estudos').insert({id, dados: body, nome: body.nome || '', publico: !!body.publico, rev: 1, atualizado_por: S.email});
+  const { error } = await sb.from('estudos').insert({id, dados: body, nome: body.nome || '', publico: !!body.publico, rev: 1});
   if (error) { toast('Não foi possível criar o estudo: ' + error.message); return; }
   location.hash = 'estudo-' + id;
 }
@@ -639,7 +639,7 @@ function renderDrawer() {
     const c = calc(v.dados || {});
     const conf = S.confirmV === v.id ? 'restore' : S.confirmV === 'del:' + v.id ? 'del' : null;
     return `<div class="ver">
-      <div class="vt"><b>${esc(v.nome)}</b><span>${new Date(num(v.criadoEm)).toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'})}</span></div>
+      <div class="vt"><b>${esc(v.nome)}</b><span>${new Date(num(v.criadoEm)).toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'})}${v.criadoPor ? ' · por ' + esc(v.criadoPor) : ''}</span></div>
       <div class="vsum"><span>VGV <b>${fM(c.vgv)}</b></span><span>Lucro <b>${fM(c.lucro)}</b></span><span>Margem <b class="pill ${margemCls(c.margem)}">${fP(c.margem)}</b></span><span>${c.nUn} un.</span></div>
       <div class="vact">
         ${S.canWrite ? `<button class="btn sm ${conf === 'restore' ? 'confirm' : ''}" data-vrest="${esc(v.id)}">${conf === 'restore' ? 'Confirmar: voltar para esta' : 'Restaurar'}</button>` : ''}
@@ -655,7 +655,7 @@ async function flushSave() { if (S.saveT) { clearTimeout(S.saveT); S.saveT = nul
 async function addVersion(nome, dados) {
   const d = clone(dados); delete d._client;
   ['_rev', 'id', 'atualizadoPor'].forEach(k => delete d[k]);
-  const { error } = await sb.from('estudo_versoes').insert({estudo_id: S.curId, nome, dados: d, criado_por: S.email});
+  const { error } = await sb.from('estudo_versoes').insert({estudo_id: S.curId, nome, dados: d});
   if (error) throw error;
   loadVersions();
 }
@@ -1320,20 +1320,22 @@ async function renderAcessos() {
 const PAPEIS = {admin:'Admin (tudo + acessos)', editor:'Editor (cria e edita)', leitor:'Leitor (só vê e exporta)'};
 function drawAcessos() {
   const rows = A.rows.map(r => `<tr>
+    <td style="width:170px"><input class="cell" data-accnome="${esc(r.email)}" value="${esc(r.nome || '')}" title="Primeiro nome que aparece para os outros"></td>
     <td>${esc(r.email)}${r.email === S.email ? ' <span class="tag pub">você</span>' : ''}</td>
     <td style="width:220px">${r.email === S.email ? esc(PAPEIS[r.papel]) : `<select class="cell" data-papel="${esc(r.email)}">${Object.entries(PAPEIS).map(([k, v]) => `<option value="${k}" ${r.papel === k ? 'selected' : ''}>${v}</option>`).join('')}</select>`}</td>
     <td>${r.tem_conta ? '<span class="pill good">Já criou senha</span>' : '<span class="pill warn">Ainda não acessou</span>'}</td>
     <td style="width:170px;text-align:right">${r.email === S.email ? '' : `<button class="btn sm ghost danger ${A.confirm === r.email ? 'confirm' : ''}" data-rmacc="${esc(r.email)}">${A.confirm === r.email ? 'Confirmar remoção' : 'Remover acesso'}</button>`}</td></tr>`).join('');
   $('#app').innerHTML = `<div class="wrap">
-    <div class="listhead"><div><a class="btn sm ghost" href="#inicio">← Estudos</a><h1 style="margin-top:8px">Acessos</h1><p>Só os e-mails desta lista conseguem entrar. Depois de liberar, envie o link do sistema para a pessoa: no primeiro acesso ela cria a própria senha.</p></div></div>
+    <div class="listhead"><div><a class="btn sm ghost" href="#inicio">← Estudos</a><h1 style="margin-top:8px">Acessos</h1><p>Só os e-mails desta lista conseguem entrar. Para os outros usuários aparece apenas o primeiro nome de cada pessoa, nunca o e-mail. Depois de liberar, envie o link do sistema para a pessoa: no primeiro acesso ela cria a própria senha.</p></div></div>
     ${A.err ? `<div class="alert">${esc(A.err)}</div>` : ''}
     <section class="sec"><div class="body">
       <form id="fAcc" class="accform">
+        <div class="f" style="flex:1;min-width:150px"><label for="aNome">Primeiro nome</label><div class="inp"><input id="aNome" placeholder="Ex.: Gilson"></div></div>
         <div class="f" style="flex:2;min-width:220px"><label for="aEmail">E-mail para liberar</label><div class="inp"><input id="aEmail" type="email" required placeholder="nome@empresa.com.br"></div></div>
         <div class="f" style="flex:1;min-width:200px"><label for="aPapel">Tipo de acesso</label><div class="inp"><select id="aPapel">${Object.entries(PAPEIS).map(([k, v]) => `<option value="${k}" ${k === 'editor' ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>
         <button class="btn pri" type="submit">${ICON.plus}Liberar acesso</button>
       </form>
-      <div class="tw" style="margin-top:16px"><table><thead><tr><th>E-mail</th><th>Acesso</th><th>Situação</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="padding:14px">Nenhum e-mail liberado.</td></tr>'}</tbody></table></div>
+      <div class="tw" style="margin-top:16px"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Acesso</th><th>Situação</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" style="padding:14px">Nenhum e-mail liberado.</td></tr>'}</tbody></table></div>
       <div class="pubbox" style="margin-top:16px"><div><b>Link do sistema</b><p>${esc(location.origin + location.pathname)}</p></div><button class="btn sm" data-copy="${esc(location.origin + location.pathname)}">Copiar link</button></div>
     </div></section></div>`;
 }
@@ -1341,9 +1343,15 @@ document.addEventListener('submit', async e => {
   if (e.target.id !== 'fAcc') return;
   e.preventDefault();
   const email = $('#aEmail').value.trim().toLowerCase(), papel = $('#aPapel').value;
-  const { error } = await sb.from('acessos').upsert({email, papel, criado_por: S.email});
+  const { error } = await sb.from('acessos').upsert({email, papel, nome: ($('#aNome').value.trim() || null)});
   if (error) toast('Não foi possível liberar: ' + error.message); else toast(`${email} liberado.`);
   renderAcessos();
+});
+document.addEventListener('change', async e => {
+  const el = e.target; if (el.dataset?.accnome === undefined) return;
+  const nome = el.value.trim();
+  const { error } = await sb.from('acessos').update({nome: nome || null}).eq('email', el.dataset.accnome);
+  toast(error ? 'Não foi possível salvar o nome: ' + error.message : 'Nome salvo.');
 });
 document.addEventListener('change', async e => {
   const el = e.target; if (el.dataset?.papel === undefined) return;
