@@ -180,3 +180,19 @@ revoke execute on function public.acessos_status() from public, anon;
 grant execute on function public.acessos_status() to authenticated;
 revoke execute on function public.meu_nome() from public, anon;
 grant execute on function public.meu_nome() to authenticated;
+
+-- ===== excluir: só quem criou o estudo ou o admin =====
+alter table public.estudos add column if not exists criado_por_uid uuid;
+create or replace function public.carimbar_criador() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then new.criado_por_uid := coalesce(auth.uid(), new.criado_por_uid);
+  else new.criado_por_uid := old.criado_por_uid; end if;
+  return new;
+end $$;
+revoke execute on function public.carimbar_criador() from public, anon, authenticated;
+drop trigger if exists carimbar_criador on public.estudos;
+create trigger carimbar_criador before insert or update on public.estudos for each row execute function public.carimbar_criador();
+drop policy if exists estudos_excluir on public.estudos;
+create policy estudos_excluir on public.estudos for delete to authenticated
+  using (public.meu_papel() = 'admin' or (public.meu_papel() = 'editor' and criado_por_uid = auth.uid()));

@@ -371,9 +371,10 @@ const S = { db:null, user:null, canWrite:false, mode:'connecting', list:[], loca
   saveT:null, saving:false, again:false, pendingRemote:null, client:rid(), confirmDel:false, tool:null,
   canPublish:false, uid:null, panel:null, versions:[], confirmV:null, pubInfo:null,
   email:null, role:null, rev:0, pollT:null, listT:null };
+const podeExcluir = s => S.role === 'admin' || (S.role === 'editor' && !!s?._uid && s._uid === S.uid);
 const homeHash = () => S.mode === 'public' ? '#publico' : '#inicio';
 const studyHash = id => (S.mode === 'public' ? '#publico-' : '#estudo-') + id;
-const fromRow = r => ({...(r.dados || {}), id:r.id, publico:!!r.publico, _rev:r.rev, atualizadoEm: Date.parse(r.atualizado_em) || 0, atualizadoPor: r.atualizado_por || ''});
+const fromRow = r => ({...(r.dados || {}), id:r.id, publico:!!r.publico, _rev:r.rev, atualizadoEm: Date.parse(r.atualizado_em) || 0, atualizadoPor: r.atualizado_por || '', _uid: r.criado_por_uid || null});
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} dias`; };
 
 /* ============ desfazer / refazer ============ */
@@ -415,7 +416,7 @@ function renderTopUser() {
 }
 
 /* ============ persistência ============ */
-function cleanBody(o) { const d = clone(o); ['_client', '_rev', 'id', 'atualizadoPor'].forEach(k => delete d[k]); return d; }
+function cleanBody(o) { const d = clone(o); ['_client', '_rev', '_uid', 'id', 'atualizadoPor'].forEach(k => delete d[k]); return d; }
 function scheduleSave() {
   if (!S.cur || !S.canWrite || S.mode !== 'db') return;
   S.cur.atualizadoEm = Date.now();
@@ -460,13 +461,14 @@ async function createStudy(data) {
   location.hash = 'estudo-' + id;
 }
 async function deleteStudy(id) {
-  const { error } = await sb.from('estudos').delete().eq('id', id);
+  const { data, error } = await sb.from('estudos').delete().eq('id', id).select('id');
   if (error) { toast('Não foi possível excluir: ' + error.message); return; }
+  if (!data || !data.length) { toast('Só quem criou o estudo ou o administrador pode excluir.'); return; }
   location.hash = 'inicio';
 }
 function bumpRev(r) { const m = String(r||'R00').match(/^(\D*)(\d+)$/); return m ? m[1] + String(+m[2] + 1).padStart(m[2].length, '0') : (r || 'R00') + '-1'; }
 async function loadList() {
-  const q = sb.from('estudos').select('id,dados,publico,rev,atualizado_em,atualizado_por').order('atualizado_em', {ascending:false});
+  const q = sb.from('estudos').select('id,dados,publico,rev,atualizado_em,atualizado_por,criado_por_uid').order('atualizado_em', {ascending:false});
   const { data, error } = S.mode === 'public' ? await q.eq('publico', true) : await q;
   if (error) { setStatus('err', 'Erro ao carregar'); return false; }
   S.list = (data || []).map(fromRow); S.listLoaded = true;
@@ -597,7 +599,7 @@ function renderStudy(keepScroll) {
       <section class="sec" id="s8"><header><span class="n">09</span><h2>Observações</h2><p>Premissas, fontes e ressalvas. Saem no final do PDF.</p></header><div class="body"><textarea id="notas" data-bind="s.notas" data-t="text" placeholder="Ex.: CUB/SC de outubro/2026, padrão R8-N. Preços de venda com base em pesquisa de mercado no bairro.">${esc(s.notas)}</textarea>
       <div class="toolrow" style="margin-top:16px;border-top:1px solid var(--line2);padding-top:14px">
         ${ro ? '' : `<button class="btn" id="dupStudy">${ICON.copy}Duplicar como nova revisão</button>
-        <button class="btn danger ${S.confirmDel ? 'confirm' : ''}" id="delStudy">${S.confirmDel ? 'Clique de novo para excluir' : 'Excluir estudo'}</button>`}
+        ${podeExcluir(s) ? `<button class="btn danger ${S.confirmDel ? 'confirm' : ''}" id="delStudy">${S.confirmDel ? 'Clique de novo para excluir' : 'Excluir estudo'}</button>` : `<span class="hint">Só quem criou o estudo ou o administrador pode excluí-lo.</span>`}`}
       </div></div></section>
     </main>
   </div></div>
@@ -654,7 +656,7 @@ function renderDrawer() {
 async function flushSave() { if (S.saveT) { clearTimeout(S.saveT); S.saveT = null; } if (S.dirty || S.saving) { await doSave(); } }
 async function addVersion(nome, dados) {
   const d = clone(dados); delete d._client;
-  ['_rev', 'id', 'atualizadoPor'].forEach(k => delete d[k]);
+  ['_rev', '_uid', 'id', 'atualizadoPor'].forEach(k => delete d[k]);
   const { error } = await sb.from('estudo_versoes').insert({estudo_id: S.curId, nome, dados: d});
   if (error) throw error;
   loadVersions();
@@ -1377,7 +1379,7 @@ async function enterApp() {
   const { data: { session } } = await sb.auth.getSession();
   if (L.step === 'nova' && session) { renderLogin(); return; }
   if (!session) { renderLogin(); return; }
-  S.email = (session.user.email || '').toLowerCase();
+  S.email = (session.user.email || '').toLowerCase(); S.uid = session.user.id;
   const { data: role } = await sb.rpc('meu_papel');
   if (!role) {
     S.mode = 'login'; renderTopUser();
